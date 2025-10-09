@@ -1,40 +1,39 @@
-// lib/main.dart
 import 'package:flutter/material.dart';
-import 'package:hive/hive.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:logger/logger.dart';
+
+// Import services
+import 'services/api_service.dart';
 import 'app.dart';
-import 'env.dart';
-import 'core/logger.dart';
-import 'dart:async';
 
 void main() async {
-  // CRITICAL FIX: ensureInitialized ko zone se bahar call karein
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Load env
-  Env.loadEnv();
+  final logger = Logger();
 
-  // Init logger
-  Logger.setDebugMode(Env.isDebug);
+  try {
+    logger.i(' Fleet Management System starting...');
 
-  // Error handling
-  FlutterError.onError = (details) {
-    FleetApp.handleError(details.exception, details.stack ?? StackTrace.empty);
-  };
+    // Initialize API service (singleton)
+    final apiService = ApiService();
 
-  // Run app in zone for error catching
-  runZonedGuarded(
-    () async {
-      // Optional: Uncomment to reset Hive data
-      // await Hive.deleteFromDisk();
-      // Logger.info('Hive data reset complete');
+    // Check backend connectivity
+    final healthCheck = await apiService.checkHealth();
+    if (healthCheck['success']) {
+      logger.i(' Backend connected successfully');
+      logger.d('Backend status: ${healthCheck['data']}');
+    } else {
+      logger.w(' Backend not available: ${healthCheck['error']}');
+      logger.w(
+        'Make sure the Python FastAPI backend is running on localhost:8000',
+      );
+    }
 
-      Logger.info('Starting app services initialization');
-      await FleetApp.initServices();
-      Logger.info('App services initialized, starting UI');
-      runApp(const FleetApp());
-    },
-    (error, stack) {
-      FleetApp.handleError(error, stack);
-    },
-  );
+    logger.i(' App initialization completed');
+  } catch (e, stackTrace) {
+    logger.e(' Failed to initialize app', error: e, stackTrace: stackTrace);
+    // Continue anyway - app will handle offline state
+  }
+
+  runApp(const ProviderScope(child: FleetManagementApp()));
 }
