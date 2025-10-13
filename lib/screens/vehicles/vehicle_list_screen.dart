@@ -301,12 +301,12 @@ class _VehicleListScreenState extends ConsumerState<VehicleListScreen> {
                       ),
                     )
                   : GridView.builder(
-                      padding: const EdgeInsets.all(16),
+                      padding: const EdgeInsets.all(12),
                       gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                         crossAxisCount: _getCrossAxisCount(context),
-                        childAspectRatio: 0.85,
-                        crossAxisSpacing: 16,
-                        mainAxisSpacing: 16,
+                        childAspectRatio: 0.75,
+                        crossAxisSpacing: 12,
+                        mainAxisSpacing: 12,
                       ),
                       itemCount: filteredVehicles.length,
                       itemBuilder: (context, index) {
@@ -317,13 +317,7 @@ class _VehicleListScreenState extends ConsumerState<VehicleListScreen> {
                             ref
                                 .read(vehicleProvider.notifier)
                                 .selectVehicle(vehicle);
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (context) =>
-                                    VehicleDetailScreen(vehicle: vehicle),
-                              ),
-                            );
+                            _showVehicleDetailDialog(context, vehicle);
                           },
                           onEdit: () {
                             Navigator.push(
@@ -361,9 +355,10 @@ class _VehicleListScreenState extends ConsumerState<VehicleListScreen> {
 
   int _getCrossAxisCount(BuildContext context) {
     final width = MediaQuery.of(context).size.width;
-    if (width > 1200) return 3;
-    if (width > 800) return 2;
-    return 1;
+    if (width > 1400) return 4;  // 4 cards on very large screens
+    if (width > 1000) return 3;  // 3 cards on large screens
+    if (width > 600) return 2;   // 2 cards on medium screens
+    return 1;                    // 1 card on small screens
   }
 
   void _showDeleteDialog(BuildContext context, Vehicle vehicle) {
@@ -425,6 +420,296 @@ class _VehicleListScreenState extends ConsumerState<VehicleListScreen> {
           ],
         );
       },
+    );
+  }
+
+  void _showVehicleDetailDialog(BuildContext context, Vehicle vehicle) {
+    showDialog(
+      context: context,
+      builder: (BuildContext dialogContext) {
+        return Dialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
+          child: Container(
+            width: MediaQuery.of(context).size.width * 0.9,
+            height: MediaQuery.of(context).size.height * 0.8,
+            constraints: const BoxConstraints(
+              maxWidth: 800,
+              maxHeight: 600,
+            ),
+            child: Column(
+              children: [
+                // Header
+                Container(
+                  decoration: const BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.centerLeft,
+                      end: Alignment.centerRight,
+                      colors: [Color(0xFF1565C0), Color(0xFF1976D2)],
+                    ),
+                    borderRadius: BorderRadius.only(
+                      topLeft: Radius.circular(20),
+                      topRight: Radius.circular(20),
+                    ),
+                  ),
+                  padding: const EdgeInsets.all(20),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 60,
+                        height: 60,
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.2),
+                          borderRadius: BorderRadius.circular(15),
+                        ),
+                        child: const Icon(
+                          Icons.directions_car,
+                          color: Colors.white,
+                          size: 32,
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              vehicle.licensePlate,
+                              style: const TextStyle(
+                                fontSize: 24,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.white,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              vehicle.displayName,
+                              style: TextStyle(
+                                fontSize: 16,
+                                color: Colors.white.withOpacity(0.9),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      IconButton(
+                        onPressed: () => Navigator.of(dialogContext).pop(),
+                        icon: const Icon(
+                          Icons.close,
+                          color: Colors.white,
+                          size: 28,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                
+                // Content
+                Expanded(
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.all(24),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Basic Info Section
+                        _buildInfoSection(
+                          'Basic Information',
+                          Icons.info_outline,
+                          [
+                            _buildDetailRow('Make', vehicle.make),
+                            _buildDetailRow('Model', vehicle.model),
+                            _buildDetailRow('Year', vehicle.year),
+                            _buildDetailRow('Color', vehicle.color),
+                            _buildDetailRow('Status', vehicle.status.displayName),
+                          ],
+                        ),
+                        
+                        const SizedBox(height: 24),
+                        
+                        // Technical Details Section
+                        _buildInfoSection(
+                          'Technical Details',
+                          Icons.build_outlined,
+                          [
+                            _buildDetailRow('VIN/Chassis', vehicle.vin),
+                            _buildDetailRow('Fuel Capacity', '${vehicle.fuelCapacity.toStringAsFixed(1)} L'),
+                            _buildDetailRow('Current Mileage', '${vehicle.currentMileage.toStringAsFixed(0)} KM'),
+                          ],
+                        ),
+                        
+                        const SizedBox(height: 24),
+                        
+                        // Additional Info Section
+                        if (vehicle.purchaseDate != null || vehicle.purchasePrice != null)
+                          _buildInfoSection(
+                            'Purchase Information',
+                            Icons.shopping_cart_outlined,
+                            [
+                              if (vehicle.purchaseDate != null)
+                                _buildDetailRow('Purchase Date', '${vehicle.purchaseDate!.day}/${vehicle.purchaseDate!.month}/${vehicle.purchaseDate!.year}'),
+                              if (vehicle.purchasePrice != null)
+                                _buildDetailRow('Purchase Price', '\$${vehicle.purchasePrice!.toStringAsFixed(2)}'),
+                            ],
+                          ),
+                        
+                        if (vehicle.notes?.isNotEmpty == true) ...[
+                          const SizedBox(height: 24),
+                          _buildInfoSection(
+                            'Notes',
+                            Icons.note_outlined,
+                            [
+                              Container(
+                                width: double.infinity,
+                                padding: const EdgeInsets.all(16),
+                                decoration: BoxDecoration(
+                                  color: Colors.grey[100],
+                                  borderRadius: BorderRadius.circular(12),
+                                  border: Border.all(color: Colors.grey[300]!),
+                                ),
+                                child: Text(
+                                  vehicle.notes!,
+                                  style: const TextStyle(fontSize: 14),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                ),
+                
+                // Action Buttons
+                Container(
+                  padding: const EdgeInsets.all(20),
+                  decoration: BoxDecoration(
+                    color: Colors.grey[50],
+                    borderRadius: const BorderRadius.only(
+                      bottomLeft: Radius.circular(20),
+                      bottomRight: Radius.circular(20),
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: () {
+                            Navigator.of(dialogContext).pop();
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => VehicleFormScreen(vehicle: vehicle),
+                              ),
+                            );
+                          },
+                          icon: const Icon(Icons.edit_outlined),
+                          label: const Text('Edit'),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: const Color(0xFF1565C0),
+                            side: const BorderSide(color: Color(0xFF1565C0)),
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      OutlinedButton.icon(
+                        onPressed: () {
+                          Navigator.of(dialogContext).pop();
+                          _showDeleteDialog(context, vehicle);
+                        },
+                        icon: const Icon(Icons.delete_outline),
+                        label: const Text('Delete'),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: Colors.red,
+                          side: const BorderSide(color: Colors.red),
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildInfoSection(String title, IconData icon, List<Widget> children) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Icon(icon, size: 20, color: const Color(0xFF1565C0)),
+            const SizedBox(width: 8),
+            Text(
+              title,
+              style: const TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: Color(0xFF1F2937),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 16),
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: Colors.grey[200]!),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.05),
+                blurRadius: 4,
+                offset: const Offset(0, 2),
+              ),
+            ],
+          ),
+          child: Column(
+            children: children,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildDetailRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 120,
+            child: Text(
+              label,
+              style: const TextStyle(
+                fontSize: 14,
+                color: Color(0xFF6B7280),
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
+          const Text(':', style: TextStyle(color: Color(0xFF6B7280))),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              value,
+              style: const TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+                color: Color(0xFF1F2937),
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

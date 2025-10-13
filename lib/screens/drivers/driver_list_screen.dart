@@ -383,12 +383,12 @@ class _DriverListScreenState extends ConsumerState<DriverListScreen>
                       ),
                     )
                   : GridView.builder(
-                      padding: const EdgeInsets.all(16),
+                      padding: const EdgeInsets.all(12),
                       gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                         crossAxisCount: _getCrossAxisCount(context),
-                        childAspectRatio: 0.85,
-                        crossAxisSpacing: 16,
-                        mainAxisSpacing: 16,
+                        childAspectRatio: 0.75, // Smaller card height
+                        crossAxisSpacing: 12,
+                        mainAxisSpacing: 12,
                       ),
                       itemCount: drivers.length,
                       itemBuilder: (context, index) {
@@ -450,9 +450,10 @@ class _DriverListScreenState extends ConsumerState<DriverListScreen>
 
   int _getCrossAxisCount(BuildContext context) {
     final width = MediaQuery.of(context).size.width;
-    if (width > 1200) return 3;
-    if (width > 800) return 2;
-    return 1;
+    if (width > 1400) return 4;  // 4 cards on very large screens
+    if (width > 1000) return 3;  // 3 cards on large screens
+    if (width > 600) return 2;   // 2 cards on medium screens
+    return 1;                    // 1 card on small screens
   }
 
   void _showDeleteDialog(BuildContext context, Driver driver) {
