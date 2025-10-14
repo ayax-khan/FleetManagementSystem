@@ -192,6 +192,70 @@ class ApiService {
     }
   }
 
+  // Job API methods
+  Future<List<Map<String, dynamic>>> getJobs({
+    int skip = 0,
+    int limit = 100,
+    String? status,
+  }) async {
+    final queryParams = {
+      'skip': skip.toString(),
+      'limit': limit.toString(),
+    };
+    
+    if (status != null) {
+      queryParams['status'] = status;
+    }
+
+    final response = await get('/trips/', queryParameters: queryParams);
+    
+    if (response['success'] == true) {
+      return List<Map<String, dynamic>>.from(response['data'] ?? []);
+    } else {
+      throw Exception(response['message'] ?? 'Failed to fetch jobs');
+    }
+  }
+
+  Future<Map<String, dynamic>> createJob(Map<String, dynamic> jobData) async {
+    final response = await post('/trips/', data: jobData);
+    
+    if (response['success'] == true) {
+      return Map<String, dynamic>.from(response['data'] ?? {});
+    } else {
+      throw Exception(response['message'] ?? 'Failed to create job');
+    }
+  }
+
+  Future<Map<String, dynamic>> updateJob(String jobId, Map<String, dynamic> jobData) async {
+    final response = await put('/trips/$jobId', data: jobData);
+    
+    if (response['success'] == true) {
+      return Map<String, dynamic>.from(response['data'] ?? {});
+    } else {
+      throw Exception(response['message'] ?? 'Failed to update job');
+    }
+  }
+
+  Future<Map<String, dynamic>> deleteJob(String jobId) async {
+    final response = await delete('/trips/$jobId');
+    
+    if (response['success'] == true) {
+      return response;
+    } else {
+      throw Exception(response['message'] ?? 'Failed to delete job');
+    }
+  }
+
+  Future<Map<String, dynamic>> getJob(String jobId) async {
+    final response = await get('/trips/$jobId');
+    
+    if (response['success'] == true) {
+      return Map<String, dynamic>.from(response['data'] ?? {});
+    } else {
+      throw Exception(response['message'] ?? 'Failed to fetch job');
+    }
+  }
+
   // Vehicle API methods
   Future<List<Map<String, dynamic>>> getVehicles({
     int skip = 0,

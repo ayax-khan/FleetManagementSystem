@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import '../providers/vehicle_provider.dart';
 import '../providers/driver_provider.dart';
+import '../providers/job_provider.dart';
 import '../providers/fuel_provider.dart';
 import '../providers/attendance_provider.dart';
 import '../widgets/dashboard/stat_card.dart';
@@ -42,6 +43,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
       // Force refresh data from providers
       await ref.read(vehicleProvider.notifier).loadVehicles();
       await ref.read(driverProvider.notifier).loadDrivers();
+      await ref.read(jobProvider.notifier).loadJobs();
       await ref.read(fuelProvider.notifier).loadFuelData();
       await ref.read(attendanceProvider.notifier).loadAttendances();
       
@@ -51,6 +53,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
       // Read updated states
       final vehicleState = ref.read(vehicleProvider);
       final driverState = ref.read(driverProvider);
+      final jobState = ref.read(jobProvider);
       final fuelState = ref.read(fuelProvider);
       final attendanceState = ref.read(attendanceProvider);
 
@@ -60,6 +63,9 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
           .where((v) => v.status.name == 'active')
           .length;
       final totalDrivers = driverState.drivers.length;
+      final totalJobs = jobState.jobs.length;
+      final pendingJobs = jobState.jobs.where((j) => j.isPending).length;
+      final completedJobs = jobState.jobs.where((j) => j.isCompleted).length;
       final totalAttendances = attendanceState.attendances.length;
 
       // Calculate fuel statistics
@@ -95,6 +101,9 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
             'totalVehicles': totalVehicles,
             'activeVehicles': activeVehicles,
             'totalDrivers': totalDrivers,
+            'totalJobs': totalJobs,
+            'pendingJobs': pendingJobs,
+            'completedJobs': completedJobs,
             'totalAttendances': totalAttendances,
             'todayFuel': todayFuel,
             'monthFuel': monthFuel,
@@ -182,6 +191,15 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                     subtitle: 'All registered drivers',
                     icon: Icons.people,
                     color: const Color(0xFF8B5CF6),
+                  ),
+                  StatCard(
+                    title: 'Job Management',
+                    value: '${_stats['totalJobs'] ?? 0}',
+                    subtitle: '${_stats['pendingJobs'] ?? 0} pending • ${_stats['completedJobs'] ?? 0} done',
+                    icon: Icons.work,
+                    color: const Color(0xFF059669),
+                    trend: true,
+                    onTap: () => Navigator.pushNamed(context, '/jobs'),
                   ),
                   StatCard(
                     title: 'Attendance Records',

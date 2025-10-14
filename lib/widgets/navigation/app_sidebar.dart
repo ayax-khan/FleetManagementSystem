@@ -35,6 +35,13 @@ class _AppSidebarState extends ConsumerState<AppSidebar> {
       route: '/drivers',
     ),
     NavigationItem(
+      id: 'jobs',
+      title: 'Job Management',
+      icon: Icons.work_outline,
+      activeIcon: Icons.work,
+      route: '/jobs',
+    ),
+    NavigationItem(
       id: 'attendance',
       title: 'Attendance',
       icon: Icons.access_time_outlined,
@@ -132,7 +139,7 @@ class _AppSidebarState extends ConsumerState<AppSidebar> {
             width: 40,
             height: 40,
             decoration: BoxDecoration(
-              color: const Color(0xFF1E3A8A).withOpacity(0.1),
+              color: const Color(0xFF1E3A8A).withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(8),
             ),
             child: const Icon(
@@ -188,11 +195,11 @@ class _AppSidebarState extends ConsumerState<AppSidebar> {
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             decoration: BoxDecoration(
               color: isSelected 
-                  ? const Color(0xFF1E3A8A).withOpacity(0.1)
+                  ? const Color(0xFF1E3A8A).withValues(alpha: 0.1)
                   : Colors.transparent,
               borderRadius: BorderRadius.circular(12),
               border: isSelected
-                  ? Border.all(color: const Color(0xFF1E3A8A).withOpacity(0.3))
+                  ? Border.all(color: const Color(0xFF1E3A8A).withValues(alpha: 0.3))
                   : null,
             ),
             child: Row(
@@ -231,7 +238,7 @@ class _AppSidebarState extends ConsumerState<AppSidebar> {
                         vertical: 2,
                       ),
                       decoration: BoxDecoration(
-                        color: Colors.orange.withOpacity(0.2),
+                        color: Colors.orange.withValues(alpha: 0.2),
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: const Text(
@@ -312,6 +319,9 @@ class _AppSidebarState extends ConsumerState<AppSidebar> {
         break;
       case 'drivers':
         Navigator.pushReplacementNamed(context, '/drivers');
+        break;
+      case 'jobs':
+        Navigator.pushReplacementNamed(context, '/jobs');
         break;
       case 'attendance':
         Navigator.pushReplacementNamed(context, '/attendance');

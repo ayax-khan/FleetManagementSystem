@@ -3,6 +3,7 @@ import '../layouts/main_layout.dart';
 import '../screens/dashboard_screen.dart';
 import '../screens/vehicles/vehicle_list_screen.dart';
 import '../screens/drivers/driver_list_screen.dart';
+import '../screens/jobs/job_list_screen.dart';
 import '../screens/attendance/attendance_list_screen.dart';
 import '../screens/fuel/fuel_list_screen.dart';
 import '../screens/import/import_screen.dart';
@@ -11,6 +12,7 @@ class AppRouter {
   static const String dashboard = '/dashboard';
   static const String vehicles = '/vehicles';
   static const String drivers = '/drivers';
+  static const String jobs = '/jobs';
   static const String attendance = '/attendance';
   static const String fuel = '/fuel';
   static const String import = '/import';
@@ -40,6 +42,15 @@ class AppRouter {
           const MainLayout(
             title: 'Drivers',
             child: DriverListScreen(),
+          ),
+          settings,
+        );
+      
+      case jobs:
+        return _buildPageRoute(
+          const MainLayout(
+            title: 'Job Management',
+            child: JobListScreen(),
           ),
           settings,
         );
