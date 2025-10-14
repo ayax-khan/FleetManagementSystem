@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../models/vehicle.dart';
 import '../../providers/vehicle_provider.dart';
 import 'vehicle_form_screen.dart';
+import 'vehicle_form_dialog.dart';
 import 'vehicle_detail_screen.dart';
 
 class VehicleListScreen extends ConsumerStatefulWidget {
@@ -320,13 +321,7 @@ class _VehicleListScreenState extends ConsumerState<VehicleListScreen> {
                             _showVehicleDetailDialog(context, vehicle);
                           },
                           onEdit: () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (context) =>
-                                    VehicleFormScreen(vehicle: vehicle),
-                              ),
-                            );
+                            _showEditVehicleDialog(vehicle);
                           },
                           onDelete: () {
                             _showDeleteDialog(context, vehicle);
@@ -340,10 +335,7 @@ class _VehicleListScreenState extends ConsumerState<VehicleListScreen> {
       ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () {
-          Navigator.push(
-            context,
-            MaterialPageRoute(builder: (context) => const VehicleFormScreen()),
-          );
+          _showAddVehicleDialog();
         },
         backgroundColor: const Color(0xFF1565C0),
         foregroundColor: Colors.white,
@@ -596,12 +588,7 @@ class _VehicleListScreenState extends ConsumerState<VehicleListScreen> {
                         child: OutlinedButton.icon(
                           onPressed: () {
                             Navigator.of(dialogContext).pop();
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (context) => VehicleFormScreen(vehicle: vehicle),
-                              ),
-                            );
+                            _showEditVehicleDialog(vehicle);
                           },
                           icon: const Icon(Icons.edit_outlined),
                           label: const Text('Edit'),
@@ -710,6 +697,22 @@ class _VehicleListScreenState extends ConsumerState<VehicleListScreen> {
           ),
         ],
       ),
+    );
+  }
+
+  void _showAddVehicleDialog() {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const VehicleFormDialog(),
+    );
+  }
+
+  void _showEditVehicleDialog(Vehicle vehicle) {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => VehicleFormDialog(vehicle: vehicle),
     );
   }
 }
@@ -1018,3 +1021,4 @@ class _VehicleCardState extends State<_VehicleCard>
     }
   }
 }
+

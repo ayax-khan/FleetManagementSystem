@@ -25,16 +25,30 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
   @override
   void initState() {
     super.initState();
-    _loadDashboardData();
+    // Load data on init and whenever providers update
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _loadDashboardData();
+    });
   }
 
   Future<void> _loadDashboardData() async {
+    if (!mounted) return;
+    
     setState(() {
       _isLoading = true;
     });
 
     try {
-      // Load data from providers
+      // Force refresh data from providers
+      await ref.read(vehicleProvider.notifier).loadVehicles();
+      await ref.read(driverProvider.notifier).loadDrivers();
+      await ref.read(fuelProvider.notifier).loadFuelData();
+      await ref.read(attendanceProvider.notifier).loadAttendances();
+      
+      // Wait a bit for state to update
+      await Future.delayed(const Duration(milliseconds: 100));
+      
+      // Read updated states
       final vehicleState = ref.read(vehicleProvider);
       final driverState = ref.read(driverProvider);
       final fuelState = ref.read(fuelProvider);
@@ -75,23 +89,27 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
         });
       }
 
-      setState(() {
-        _stats = {
-          'totalVehicles': totalVehicles,
-          'activeVehicles': activeVehicles,
-          'totalDrivers': totalDrivers,
-          'totalAttendances': totalAttendances,
-          'todayFuel': todayFuel,
-          'monthFuel': monthFuel,
-          'avgFuelPerDay': avgFuelPerDay,
-        };
-        _fuelData = last7Days;
-        _isLoading = false;
-      });
+      if (mounted) {
+        setState(() {
+          _stats = {
+            'totalVehicles': totalVehicles,
+            'activeVehicles': activeVehicles,
+            'totalDrivers': totalDrivers,
+            'totalAttendances': totalAttendances,
+            'todayFuel': todayFuel,
+            'monthFuel': monthFuel,
+            'avgFuelPerDay': avgFuelPerDay,
+          };
+          _fuelData = last7Days;
+          _isLoading = false;
+        });
+      }
     } catch (e) {
-      setState(() {
-        _isLoading = false;
-      });
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
     }
   }
 

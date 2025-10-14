@@ -83,6 +83,11 @@ class FuelNotifier extends StateNotifier<FuelState> {
     }
   }
 
+  // Alias for compatibility
+  Future<void> loadFuelRecords() async {
+    return loadFuelData();
+  }
+
   // Add fuel record
   Future<bool> addFuelRecord(FuelRecord fuelRecord) async {
     try {

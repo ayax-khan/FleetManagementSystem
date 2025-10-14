@@ -68,7 +68,15 @@ class ApiService {
         if (error.response != null) {
           final statusCode = error.response!.statusCode;
           final data = error.response!.data;
-          message = 'HTTP $statusCode: ${data['detail'] ?? 'Server error'}';
+          String detail = 'Server error';
+          if (data is Map<String, dynamic>) {
+            detail = data['detail'] ?? 'Server error';
+          } else if (data is String && data.isNotEmpty) {
+            detail = data;
+          } else {
+            detail = 'Unexpected response format';
+          }
+          message = 'HTTP $statusCode: $detail';
         }
         break;
       case DioExceptionType.unknown:
@@ -85,18 +93,16 @@ class ApiService {
   Future<Map<String, dynamic>> checkHealth() async {
     try {
       // Use the correct health endpoint path
-      final dio = Dio(BaseOptions(
-        baseUrl: 'http://127.0.0.1:8000',
-        connectTimeout: const Duration(seconds: 10),
-        receiveTimeout: const Duration(seconds: 10),
-      ));
-      
+      final dio = Dio(
+        BaseOptions(
+          baseUrl: 'http://127.0.0.1:8000',
+          connectTimeout: const Duration(seconds: 10),
+          receiveTimeout: const Duration(seconds: 10),
+        ),
+      );
+
       final response = await dio.get('/api/health');
-      return {
-        'success': true,
-        'status': 'connected',
-        'data': response.data,
-      };
+      return {'success': true, 'status': 'connected', 'data': response.data};
     } catch (e) {
       return {
         'success': false,
@@ -140,8 +146,22 @@ class ApiService {
   }) async {
     try {
       final response = await _dio.put(endpoint, data: data);
-      return response.data;
+      return response.data ?? {};
     } catch (e) {
+      // Handle redirect errors (307) by retrying without trailing slash
+      if (e is DioException && e.response?.statusCode == 307) {
+        try {
+          // Try without trailing slash if it has one, or add one if it doesn't
+          final newEndpoint = endpoint.endsWith('/')
+              ? endpoint.substring(0, endpoint.length - 1)
+              : '$endpoint/';
+          final response = await _dio.put(newEndpoint, data: data);
+          return response.data ?? {};
+        } catch (retryError) {
+          _logger.e('Retry failed for redirect: $retryError');
+          rethrow;
+        }
+      }
       rethrow;
     }
   }
@@ -181,7 +201,7 @@ class ApiService {
     final params = <String, dynamic>{'skip': skip, 'limit': limit};
     if (status != null) params['status'] = status;
 
-    final response = await get('/vehicles', queryParameters: params);
+    final response = await get('/vehicles/', queryParameters: params);
     return List<Map<String, dynamic>>.from(response['data'] ?? []);
   }
 
@@ -193,7 +213,7 @@ class ApiService {
   Future<Map<String, dynamic>> createVehicle(
     Map<String, dynamic> vehicleData,
   ) async {
-    final response = await post('/vehicles', data: vehicleData);
+    final response = await post('/vehicles/', data: vehicleData);
     return response['data'] ?? {};
   }
 
@@ -224,14 +244,27 @@ class ApiService {
     final params = <String, dynamic>{'skip': skip, 'limit': limit};
     if (status != null) params['status'] = status;
 
-    final response = await get('/drivers', queryParameters: params);
+    final response = await get('/drivers/', queryParameters: params);
     return List<Map<String, dynamic>>.from(response['data'] ?? []);
+  }
+
+  Future<Map<String, dynamic>> getDriver(String driverId) async {
+    final response = await get('/drivers/$driverId');
+    return response['data'] ?? {};
   }
 
   Future<Map<String, dynamic>> createDriver(
     Map<String, dynamic> driverData,
   ) async {
-    final response = await post('/drivers', data: driverData);
+    final response = await post('/drivers/', data: driverData);
+    return response['data'] ?? {};
+  }
+
+  Future<Map<String, dynamic>> updateDriver(
+    String driverId,
+    Map<String, dynamic> updates,
+  ) async {
+    final response = await put('/drivers/$driverId', data: updates);
     return response['data'] ?? {};
   }
 

@@ -103,63 +103,113 @@ class Driver {
   Map<String, dynamic> toJson() {
     return {
       'id': id,
-      'first_name': firstName,
-      'last_name': lastName,
+      // Backend expects 'name' field (combining first and last name)
+      'name': fullName, // Use fullName getter that combines firstName + lastName
       'employee_id': employeeId,
       'cnic': cnic,
-      'phone_number': phoneNumber,
-      'email': email,
-      'address': address,
-      'date_of_birth': dateOfBirth.toIso8601String(),
-      'joining_date': joiningDate.toIso8601String(),
-      'status': status.name,
-      'category': category.name,
+      // Map Flutter model fields to backend schema fields
       'license_number': licenseNumber,
+      'license_expiry': licenseExpiryDate.toIso8601String().split('T')[0], // Date only
       'license_category': licenseCategory.name,
-      'license_expiry_date': licenseExpiryDate.toIso8601String(),
+      'phone': phoneNumber,
+      'email': email,
+      'emergency_contact': emergencyContactName != null && emergencyContactNumber != null 
+          ? '$emergencyContactName: $emergencyContactNumber' 
+          : emergencyContactName ?? emergencyContactNumber,
+      'address': address,
+      'date_of_birth': dateOfBirth.toIso8601String().split('T')[0], // Date only
+      'joining_date': joiningDate.toIso8601String().split('T')[0], // Date only
       'basic_salary': basicSalary,
-      'vehicle_assigned': vehicleAssigned,
-      'emergency_contact_name': emergencyContactName,
-      'emergency_contact_number': emergencyContactNumber,
+      'assigned_vehicle': vehicleAssigned,
+      'category': category.name,
       'notes': notes,
-      'created_at': createdAt.toIso8601String(),
-      'updated_at': updatedAt.toIso8601String(),
+      'status': status.name,
     };
   }
 
   factory Driver.fromJson(Map<String, dynamic> json) {
+    // Safe enum parsing helper
+    T parseEnum<T extends Enum>(dynamic value, List<T> values, T defaultValue, String Function(T) nameExtractor, String Function(T) displayNameExtractor) {
+      if (value == null) return defaultValue;
+      
+      final valueStr = value.toString().toLowerCase();
+      
+      // Try exact match first
+      try {
+        return values.firstWhere(
+          (e) => nameExtractor(e).toLowerCase() == valueStr,
+        );
+      } catch (e) {
+        // Try display name match
+        try {
+          return values.firstWhere(
+            (e) => displayNameExtractor(e).toLowerCase() == valueStr,
+          );
+        } catch (e) {
+          return defaultValue;
+        }
+      }
+    }
+    
+    // Safe date parsing helper
+    DateTime parseDate(String? dateStr, DateTime fallback) {
+      if (dateStr == null || dateStr.isEmpty) return fallback;
+      try {
+        return DateTime.parse(dateStr);
+      } catch (e) {
+        return fallback;
+      }
+    }
+    
+    final now = DateTime.now();
+    
+    // Parse the 'name' field from backend and split it into first and last names
+    String fullNameFromBackend = json['name']?.toString() ?? '';
+    List<String> nameParts = fullNameFromBackend.split(' ');
+    String firstName = nameParts.isNotEmpty ? nameParts.first : '';
+    String lastName = nameParts.length > 1 ? nameParts.sublist(1).join(' ') : '';
+    
     return Driver(
-      id: json['id'] ?? '',
-      firstName: json['first_name'] ?? '',
-      lastName: json['last_name'] ?? '',
-      employeeId: json['employee_id'] ?? '',
-      cnic: json['cnic'] ?? '',
-      phoneNumber: json['phone_number'] ?? '',
-      email: json['email'],
-      address: json['address'] ?? '',
-      dateOfBirth: DateTime.parse(json['date_of_birth']),
-      joiningDate: DateTime.parse(json['joining_date']),
-      status: DriverStatus.values.firstWhere(
-        (e) => e.name == json['status'],
-        orElse: () => DriverStatus.active,
+      id: json['id']?.toString() ?? '',
+      firstName: firstName,
+      lastName: lastName,
+      employeeId: json['employee_id']?.toString() ?? '',
+      cnic: json['cnic']?.toString() ?? '', // Backend doesn't have CNIC, using default
+      phoneNumber: json['phone']?.toString() ?? '', // Backend uses 'phone' not 'phone_number'
+      email: json['email']?.toString(),
+      address: json['address']?.toString() ?? '',
+      dateOfBirth: parseDate(json['date_of_birth']?.toString(), now.subtract(const Duration(days: 365 * 30))),
+      joiningDate: parseDate(json['joining_date']?.toString(), now),
+      status: parseEnum(
+        json['status'],
+        DriverStatus.values,
+        DriverStatus.active,
+        (e) => e.name,
+        (e) => e.displayName,
       ),
-      category: DriverCategory.values.firstWhere(
-        (e) => e.name == json['category'],
-        orElse: () => DriverCategory.regular,
+      category: parseEnum(
+        json['category'],
+        DriverCategory.values,
+        DriverCategory.regular,
+        (e) => e.name,
+        (e) => e.displayName,
       ),
-      licenseNumber: json['license_number'] ?? '',
-      licenseCategory: LicenseCategory.values.firstWhere(
-        (e) => e.name == json['license_category'],
-        orElse: () => LicenseCategory.lightVehicle,
+      licenseNumber: json['license_number']?.toString() ?? '',
+      licenseCategory: parseEnum(
+        json['license_category'],
+        LicenseCategory.values,
+        LicenseCategory.lightVehicle,
+        (e) => e.name,
+        (e) => e.displayName,
       ),
-      licenseExpiryDate: DateTime.parse(json['license_expiry_date']),
-      basicSalary: (json['basic_salary'] ?? 0).toDouble(),
-      vehicleAssigned: json['vehicle_assigned'],
-      emergencyContactName: json['emergency_contact_name'],
-      emergencyContactNumber: json['emergency_contact_number'],
-      notes: json['notes'],
-      createdAt: DateTime.parse(json['created_at'] ?? DateTime.now().toIso8601String()),
-      updatedAt: DateTime.parse(json['updated_at'] ?? DateTime.now().toIso8601String()),
+      licenseExpiryDate: parseDate(json['license_expiry']?.toString(), now.add(const Duration(days: 365))), // Backend uses 'license_expiry'
+      basicSalary: (json['basic_salary'] ?? 50000).toDouble(), // Default salary since backend doesn't have this field
+      vehicleAssigned: json['assigned_vehicle']?.toString(), // Backend uses 'assigned_vehicle'
+      emergencyContactName: _parseEmergencyContactName(json['emergency_contact']?.toString()),
+      emergencyContactNumber: _parseEmergencyContactNumber(json['emergency_contact']?.toString()),
+      notes: json['notes']?.toString(),
+      createdAt: parseDate(json['created_at']?.toString(), now),
+      updatedAt: parseDate(json['updated_at']?.toString(), now),
     );
   }
 
@@ -198,6 +248,26 @@ class Driver {
   }
 
   bool get hasVehicleAssigned => vehicleAssigned != null && vehicleAssigned!.isNotEmpty;
+  
+  // Helper methods for parsing emergency contact from backend
+  static String? _parseEmergencyContactName(String? emergencyContact) {
+    if (emergencyContact == null || emergencyContact.isEmpty) return null;
+    if (emergencyContact.contains(':')) {
+      return emergencyContact.split(':')[0].trim();
+    }
+    return emergencyContact;
+  }
+  
+  static String? _parseEmergencyContactNumber(String? emergencyContact) {
+    if (emergencyContact == null || emergencyContact.isEmpty) return null;
+    if (emergencyContact.contains(':')) {
+      List<String> parts = emergencyContact.split(':');
+      if (parts.length > 1) {
+        return parts[1].trim();
+      }
+    }
+    return null;
+  }
 }
 
 enum DriverStatus {
@@ -228,8 +298,11 @@ enum DriverStatus {
 }
 
 enum DriverCategory {
+  transportOfficial('Transport Official', '🎖️'),
+  generalDrivers('General Drivers', '🚗'),
+  shiftDrivers('Shift Drivers', '🔄'),
+  entitledDrivers('Entitled Drivers', '⭐'),
   regular('Regular', '👤'),
-  senior('Senior', '⭐'),
   trainee('Trainee', '📚'),
   contractor('Contractor', '🤝'),
   partTime('Part Time', '⏰');
@@ -240,10 +313,16 @@ enum DriverCategory {
   
   Color get color {
     switch (this) {
+      case DriverCategory.transportOfficial:
+        return const Color(0xFF1976D2);
+      case DriverCategory.generalDrivers:
+        return const Color(0xFF607D8B);
+      case DriverCategory.shiftDrivers:
+        return const Color(0xFF00695C);
+      case DriverCategory.entitledDrivers:
+        return const Color(0xFFFF9800);
       case DriverCategory.regular:
         return const Color(0xFF607D8B);
-      case DriverCategory.senior:
-        return const Color(0xFFFF9800);
       case DriverCategory.trainee:
         return const Color(0xFF4CAF50);
       case DriverCategory.contractor:

@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
 import '../models/driver.dart';
 import '../utils/debug_utils.dart';
+import '../services/api_service.dart';
 
 class DriverState {
   final List<Driver> drivers;
@@ -35,6 +36,7 @@ class DriverState {
 
 class DriverNotifier extends StateNotifier<DriverState> {
   final Uuid _uuid = const Uuid();
+  final ApiService _apiService = ApiService();
   bool _isOperationInProgress = false;
 
   DriverNotifier() : super(const DriverState()) {
@@ -48,29 +50,31 @@ class DriverNotifier extends StateNotifier<DriverState> {
     }
 
     _isOperationInProgress = true;
-    DebugUtils.log('Loading drivers', 'DRIVER');
+    DebugUtils.log('Loading drivers from backend API', 'DRIVER');
     
     state = state.copyWith(isLoading: true, clearError: true);
 
     try {
-      // Simulate API call - replace with actual API call later
-      await Future.delayed(const Duration(milliseconds: 800));
-
-      // Mock data for now
-      final mockDrivers = _generateMockDrivers();
+      // Load from backend API
+      final apiDrivers = await _apiService.getDrivers();
+      
+      // Convert API response to Driver objects
+      final drivers = apiDrivers.map((json) => _mapApiDriverToModel(json)).toList();
 
       state = state.copyWith(
-        drivers: mockDrivers,
+        drivers: drivers,
         isLoading: false,
       );
 
-      DebugUtils.log('Loaded ${mockDrivers.length} drivers', 'DRIVER');
+      DebugUtils.log('Loaded ${drivers.length} drivers from API', 'DRIVER');
     } catch (e) {
+      DebugUtils.logError('Failed to load drivers from API', e);
+      
       state = state.copyWith(
+        drivers: [], // Empty list when backend is not available
         isLoading: false,
-        error: 'Failed to load drivers: $e',
+        error: 'Failed to connect to backend: $e\n\nPlease ensure the backend is running.',
       );
-      DebugUtils.logError('Failed to load drivers', e);
     } finally {
       _isOperationInProgress = false;
     }
@@ -88,17 +92,28 @@ class DriverNotifier extends StateNotifier<DriverState> {
     state = state.copyWith(isLoading: true, clearError: true);
 
     try {
-      // Simulate API call
-      await Future.delayed(const Duration(milliseconds: 600));
-
-      // Generate new ID and timestamps
-      final newDriver = driver.copyWith(
-        id: _uuid.v4(),
-        createdAt: DateTime.now(),
-        updatedAt: DateTime.now(),
+      // Generate employee ID and prepare data for API
+      final generatedEmployeeId = _generateEmployeeId(driver.category);
+      DebugUtils.log('Generated employee ID: $generatedEmployeeId', 'DRIVER');
+      
+      DebugUtils.log('Creating driver copy with employee ID', 'DRIVER');
+      final driverToCreate = driver.copyWith(
+        employeeId: generatedEmployeeId,
       );
+      
+      DebugUtils.log('Converting driver to JSON', 'DRIVER');
+      final driverData = driverToCreate.toJson();
+      DebugUtils.log('Driver JSON keys: ${driverData.keys.toList()}', 'DRIVER');
+      
+      DebugUtils.log('Sending driver data to API: ${driverData.toString()}', 'DRIVER');
 
-      // Add to list
+      // Send to backend API
+      final createdDriverData = await _apiService.createDriver(driverData);
+      DebugUtils.log('Received driver data from API: ${createdDriverData.toString()}', 'DRIVER');
+      
+      final newDriver = _mapApiDriverToModel(createdDriverData);
+
+      // Add to local state
       final updatedDrivers = [...state.drivers, newDriver];
       
       state = state.copyWith(
@@ -132,15 +147,36 @@ class DriverNotifier extends StateNotifier<DriverState> {
     state = state.copyWith(isLoading: true, clearError: true);
 
     try {
-      // Simulate API call
-      await Future.delayed(const Duration(milliseconds: 600));
+      DebugUtils.log('Converting driver to JSON for update: ${driver.fullName}', 'DRIVER');
+      final driverData = driver.toJson();
+      DebugUtils.log('Update driver JSON keys: ${driverData.keys.toList()}', 'DRIVER');
+      
+      // Send update to backend API
+      final updatedDriverData = await _apiService.updateDriver(driver.id, driverData);
+      DebugUtils.log('Received updated driver data from API: ${updatedDriverData.toString()}', 'DRIVER');
+      
+      // Handle case where API returns empty data due to redirect or other issues
+      if (updatedDriverData.isEmpty || updatedDriverData['id'] == null) {
+        DebugUtils.log('API returned empty data, using original driver data', 'DRIVER');
+        // Update local state with the driver data we sent
+        final updatedDrivers = state.drivers.map((d) {
+          return d.id == driver.id ? driver : d;
+        }).toList();
+        
+        state = state.copyWith(
+          drivers: updatedDrivers,
+          isLoading: false,
+          selectedDriver: driver,
+        );
+        
+        DebugUtils.log('Driver updated successfully (local data): ${driver.id}', 'DRIVER');
+        return true;
+      }
+      
+      DebugUtils.log('Mapping updated driver data using _mapApiDriverToModel', 'DRIVER');
+      final updatedDriver = _mapApiDriverToModel(updatedDriverData);
 
-      // Update timestamps
-      final updatedDriver = driver.copyWith(
-        updatedAt: DateTime.now(),
-      );
-
-      // Update in list
+      // Update in local state
       final updatedDrivers = state.drivers.map((d) {
         return d.id == updatedDriver.id ? updatedDriver : d;
       }).toList();
@@ -177,20 +213,24 @@ class DriverNotifier extends StateNotifier<DriverState> {
     state = state.copyWith(isLoading: true, clearError: true);
 
     try {
-      // Simulate API call
-      await Future.delayed(const Duration(milliseconds: 500));
-
-      // Remove from list
-      final updatedDrivers = state.drivers.where((d) => d.id != driverId).toList();
+      // Send delete to backend API
+      final success = await _apiService.deleteDriver(driverId);
       
-      state = state.copyWith(
-        drivers: updatedDrivers,
-        isLoading: false,
-        clearSelected: state.selectedDriver?.id == driverId,
-      );
+      if (success) {
+        // Remove from local state
+        final updatedDrivers = state.drivers.where((d) => d.id != driverId).toList();
+        
+        state = state.copyWith(
+          drivers: updatedDrivers,
+          isLoading: false,
+          clearSelected: state.selectedDriver?.id == driverId,
+        );
 
-      DebugUtils.log('Driver deleted successfully: $driverId', 'DRIVER');
-      return true;
+        DebugUtils.log('Driver deleted successfully: $driverId', 'DRIVER');
+        return true;
+      } else {
+        throw Exception('Backend deletion failed');
+      }
     } catch (e) {
       state = state.copyWith(
         isLoading: false,
@@ -215,6 +255,254 @@ class DriverNotifier extends StateNotifier<DriverState> {
 
   void clearError() {
     state = state.copyWith(clearError: true);
+  }
+  
+  // Generate employee ID based on category
+  String _generateEmployeeId(DriverCategory category) {
+    DebugUtils.log('Generating employee ID for category: ${category.name}', 'DRIVER');
+    
+    final categoryDrivers = state.drivers
+        .where((d) => d.category == category)
+        .toList();
+    
+    DebugUtils.log('Found ${categoryDrivers.length} drivers in category ${category.name}', 'DRIVER');
+    
+    String prefix;
+    switch (category) {
+      case DriverCategory.transportOfficial:
+        prefix = 'TO';
+        break;
+      case DriverCategory.generalDrivers:
+        prefix = 'GD';
+        break;
+      case DriverCategory.shiftDrivers:
+        prefix = 'SD';
+        break;
+      case DriverCategory.entitledDrivers:
+        prefix = 'ED';
+        break;
+      case DriverCategory.regular:
+        prefix = 'RG';
+        break;
+      case DriverCategory.trainee:
+        prefix = 'TR';
+        break;
+      case DriverCategory.contractor:
+        prefix = 'CT';
+        break;
+      case DriverCategory.partTime:
+        prefix = 'PT';
+        break;
+      default:
+        prefix = 'DR';
+    }
+    
+    // Find the highest existing number for this category
+    int maxNumber = 0;
+    final prefixLength = prefix.length;
+    
+    for (final driver in categoryDrivers) {
+      final employeeId = driver.employeeId;
+      if (employeeId.startsWith(prefix) && employeeId.length > prefixLength) {
+        final numberPart = employeeId.substring(prefixLength);
+        final number = int.tryParse(numberPart);
+        if (number != null && number > maxNumber) {
+          maxNumber = number;
+        }
+      }
+    }
+    
+    final nextNumber = maxNumber + 1;
+    final generatedId = '$prefix${nextNumber.toString().padLeft(3, '0')}';
+    
+    DebugUtils.log('Generated employee ID: $generatedId', 'DRIVER');
+    return generatedId;
+  }
+
+  // Helper methods for safe enum parsing
+  DriverStatus _parseDriverStatus(dynamic statusValue) {
+    if (statusValue == null) return DriverStatus.active;
+    
+    try {
+      final statusStr = statusValue.toString().toLowerCase();
+      
+      // Try exact match first
+      try {
+        return DriverStatus.values.firstWhere(
+          (e) => e.name.toLowerCase() == statusStr,
+        );
+      } catch (e) {
+        // Try display name match
+        try {
+          return DriverStatus.values.firstWhere(
+            (e) => e.displayName.toLowerCase() == statusStr,
+          );
+        } catch (e) {
+          DebugUtils.logError('Unknown driver status: $statusValue, using default', e);
+          return DriverStatus.active;
+        }
+      }
+    } catch (e) {
+      DebugUtils.logError('Error parsing driver status: $statusValue', e);
+      return DriverStatus.active;
+    }
+  }
+  
+  DriverCategory _parseDriverCategory(dynamic categoryValue) {
+    if (categoryValue == null) return DriverCategory.regular;
+    
+    try {
+      final categoryStr = categoryValue.toString().toLowerCase();
+      
+      // Try exact match first
+      try {
+        return DriverCategory.values.firstWhere(
+          (e) => e.name.toLowerCase() == categoryStr,
+        );
+      } catch (e) {
+        // Try display name match
+        try {
+          return DriverCategory.values.firstWhere(
+            (e) => e.displayName.toLowerCase() == categoryStr,
+          );
+        } catch (e) {
+          DebugUtils.logError('Unknown driver category: $categoryValue, using default', e);
+          return DriverCategory.regular;
+        }
+      }
+    } catch (e) {
+      DebugUtils.logError('Error parsing driver category: $categoryValue', e);
+      return DriverCategory.regular;
+    }
+  }
+  
+  LicenseCategory _parseLicenseCategory(dynamic licenseCategoryValue) {
+    if (licenseCategoryValue == null) return LicenseCategory.lightVehicle;
+    
+    try {
+      final licenseCategoryStr = licenseCategoryValue.toString().toLowerCase();
+      
+      // Try exact match first
+      try {
+        return LicenseCategory.values.firstWhere(
+          (e) => e.name.toLowerCase() == licenseCategoryStr,
+        );
+      } catch (e) {
+        // Try display name match
+        try {
+          return LicenseCategory.values.firstWhere(
+            (e) => e.displayName.toLowerCase() == licenseCategoryStr,
+          );
+        } catch (e) {
+          DebugUtils.logError('Unknown license category: $licenseCategoryValue, using default', e);
+          return LicenseCategory.lightVehicle;
+        }
+      }
+    } catch (e) {
+      DebugUtils.logError('Error parsing license category: $licenseCategoryValue', e);
+      return LicenseCategory.lightVehicle;
+    }
+  }
+
+  // Helper method to map API driver data to Flutter Driver model
+  Driver _mapApiDriverToModel(Map<String, dynamic> apiData) {
+    DebugUtils.log('Mapping API driver: ${apiData.toString()}', 'DRIVER');
+    
+    // Handle null or empty data
+    if (apiData.isEmpty) {
+      DebugUtils.logError('API data is empty, cannot map driver', null);
+      throw Exception('Empty API response data');
+    }
+    
+    try {
+      final now = DateTime.now();
+      
+      // Safe enum parsing with helper methods
+      final status = _parseDriverStatus(apiData['status']);
+      final category = _parseDriverCategory(apiData['category']);
+      final licenseCategory = _parseLicenseCategory(apiData['license_category']);
+      
+      // Safe date parsing
+      DateTime parseDate(String? dateStr, DateTime fallback) {
+        if (dateStr == null || dateStr.isEmpty) return fallback;
+        try {
+          return DateTime.parse(dateStr);
+        } catch (e) {
+          DebugUtils.logError('Failed to parse date: $dateStr', e);
+          return fallback;
+        }
+      }
+      
+      // Parse the 'name' field from backend and split it into first and last names
+      String fullNameFromBackend = apiData['name']?.toString() ?? '';
+      List<String> nameParts = fullNameFromBackend.split(' ');
+      String firstName = nameParts.isNotEmpty ? nameParts.first : '';
+      String lastName = nameParts.length > 1 ? nameParts.sublist(1).join(' ') : '';
+      
+      // Parse emergency contact if it's in "Name: Number" format
+      String? emergencyContact = apiData['emergency_contact']?.toString();
+      String? emergencyContactName;
+      String? emergencyContactNumber;
+      
+      if (emergencyContact != null && emergencyContact.contains(':')) {
+        List<String> parts = emergencyContact.split(':');
+        emergencyContactName = parts[0].trim();
+        if (parts.length > 1) {
+          emergencyContactNumber = parts[1].trim();
+        }
+      } else {
+        emergencyContactName = emergencyContact;
+      }
+      
+      return Driver(
+        id: apiData['id']?.toString() ?? _uuid.v4(),
+        firstName: firstName,
+        lastName: lastName,
+        employeeId: apiData['employee_id']?.toString() ?? '',
+        cnic: apiData['cnic']?.toString() ?? '', // Backend doesn't have CNIC, using default
+        phoneNumber: apiData['phone']?.toString() ?? '', // Backend uses 'phone'
+        email: apiData['email']?.toString(),
+        address: apiData['address']?.toString() ?? '',
+        dateOfBirth: parseDate(apiData['date_of_birth']?.toString(), now.subtract(const Duration(days: 365 * 30))),
+        joiningDate: parseDate(apiData['joining_date']?.toString(), now),
+        status: status,
+        category: category,
+        licenseNumber: apiData['license_number']?.toString() ?? '',
+        licenseCategory: licenseCategory,
+        licenseExpiryDate: parseDate(apiData['license_expiry']?.toString(), now.add(const Duration(days: 365))), // Backend uses 'license_expiry'
+        basicSalary: (apiData['basic_salary'] ?? 50000).toDouble(), // Default since backend doesn't have this
+        vehicleAssigned: apiData['assigned_vehicle']?.toString(), // Backend uses 'assigned_vehicle'
+        emergencyContactName: emergencyContactName,
+        emergencyContactNumber: emergencyContactNumber,
+        notes: apiData['notes']?.toString(),
+        createdAt: parseDate(apiData['created_at']?.toString(), now),
+        updatedAt: parseDate(apiData['updated_at']?.toString(), now),
+      );
+    } catch (e) {
+      DebugUtils.logError('Failed to map API driver data: ${apiData.toString()}', e);
+      // Return a fallback driver if mapping fails
+      final now = DateTime.now();
+      return Driver(
+        id: _uuid.v4(),
+        firstName: 'Error',
+        lastName: 'Driver',
+        employeeId: 'ERROR',
+        cnic: '00000-0000000-0',
+        phoneNumber: '0000-0000000',
+        address: 'Unknown Address',
+        dateOfBirth: now.subtract(const Duration(days: 365 * 30)),
+        joiningDate: now,
+        status: DriverStatus.active,
+        category: DriverCategory.regular,
+        licenseNumber: 'UNKNOWN',
+        licenseCategory: LicenseCategory.lightVehicle,
+        licenseExpiryDate: now.add(const Duration(days: 365)),
+        basicSalary: 50000.0,
+        notes: 'Mapping error - check backend data format',
+        createdAt: now,
+        updatedAt: now,
+      );
+    }
   }
 
   // Search and filter methods
@@ -274,105 +562,6 @@ class DriverNotifier extends StateNotifier<DriverState> {
     return totalExp / state.drivers.length;
   }
 
-  // Mock data generator
-  List<Driver> _generateMockDrivers() {
-    final now = DateTime.now();
-    return [
-      Driver(
-        id: '1',
-        firstName: 'Ahmed',
-        lastName: 'Ali',
-        employeeId: 'EMP001',
-        cnic: '12345-6789012-3',
-        phoneNumber: '+92-300-1234567',
-        email: 'ahmed.ali@company.com',
-        address: 'House 123, Street 5, Lahore',
-        dateOfBirth: DateTime(1985, 5, 15),
-        joiningDate: DateTime(2020, 1, 15),
-        status: DriverStatus.active,
-        category: DriverCategory.senior,
-        licenseNumber: 'LHR-12345678',
-        licenseCategory: LicenseCategory.heavyVehicle,
-        licenseExpiryDate: DateTime(2025, 12, 31),
-        basicSalary: 45000.0,
-        vehicleAssigned: '1', // Toyota Camry
-        emergencyContactName: 'Fatima Ali',
-        emergencyContactNumber: '+92-300-9876543',
-        notes: 'Experienced driver with clean record',
-        createdAt: now.subtract(const Duration(days: 800)),
-        updatedAt: now.subtract(const Duration(days: 10)),
-      ),
-      Driver(
-        id: '2',
-        firstName: 'Muhammad',
-        lastName: 'Hassan',
-        employeeId: 'EMP002',
-        cnic: '54321-9876543-2',
-        phoneNumber: '+92-301-2345678',
-        email: 'hassan@company.com',
-        address: 'Flat 45, Block B, Karachi',
-        dateOfBirth: DateTime(1990, 8, 20),
-        joiningDate: DateTime(2021, 6, 1),
-        status: DriverStatus.active,
-        category: DriverCategory.regular,
-        licenseNumber: 'KHI-87654321',
-        licenseCategory: LicenseCategory.lightVehicle,
-        licenseExpiryDate: DateTime(2024, 11, 15), // Expiring soon
-        basicSalary: 35000.0,
-        vehicleAssigned: '2', // Ford F-150
-        emergencyContactName: 'Sarah Hassan',
-        emergencyContactNumber: '+92-301-1111111',
-        notes: 'Good performance, punctual',
-        createdAt: now.subtract(const Duration(days: 600)),
-        updatedAt: now.subtract(const Duration(days: 5)),
-      ),
-      Driver(
-        id: '3',
-        firstName: 'Usman',
-        lastName: 'Khan',
-        employeeId: 'EMP003',
-        cnic: '11111-2222222-3',
-        phoneNumber: '+92-302-3456789',
-        address: 'Village Chak 123, Faisalabad',
-        dateOfBirth: DateTime(1995, 12, 10),
-        joiningDate: DateTime(2023, 3, 15),
-        status: DriverStatus.onLeave,
-        category: DriverCategory.trainee,
-        licenseNumber: 'FSD-11223344',
-        licenseCategory: LicenseCategory.motorcycle,
-        licenseExpiryDate: DateTime(2026, 3, 20),
-        basicSalary: 25000.0,
-        emergencyContactName: 'Ali Khan',
-        emergencyContactNumber: '+92-302-4444444',
-        notes: 'On medical leave for 2 weeks',
-        createdAt: now.subtract(const Duration(days: 300)),
-        updatedAt: now.subtract(const Duration(days: 3)),
-      ),
-      Driver(
-        id: '4',
-        firstName: 'Zainab',
-        lastName: 'Sheikh',
-        employeeId: 'EMP004',
-        cnic: '33333-4444444-5',
-        phoneNumber: '+92-303-4567890',
-        email: 'zainab.sheikh@company.com',
-        address: 'House 67, Model Town, Islamabad',
-        dateOfBirth: DateTime(1988, 3, 25),
-        joiningDate: DateTime(2019, 9, 10),
-        status: DriverStatus.active,
-        category: DriverCategory.senior,
-        licenseNumber: 'ISB-55667788',
-        licenseCategory: LicenseCategory.publicServiceVehicle,
-        licenseExpiryDate: DateTime(2023, 8, 1), // Expired
-        basicSalary: 50000.0,
-        emergencyContactName: 'Omar Sheikh',
-        emergencyContactNumber: '+92-303-7777777',
-        notes: 'Female driver, specializes in passenger transport. License renewal required.',
-        createdAt: now.subtract(const Duration(days: 1200)),
-        updatedAt: now.subtract(const Duration(days: 1)),
-      ),
-    ];
-  }
 }
 
 final driverProvider = StateNotifierProvider<DriverNotifier, DriverState>((ref) {

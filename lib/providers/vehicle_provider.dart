@@ -71,7 +71,7 @@ class VehicleNotifier extends StateNotifier<VehicleState> {
       DebugUtils.logError('Failed to load vehicles from API', e);
       
       state = state.copyWith(
-        vehicles: [], // Empty list instead of mock data
+        vehicles: [], // Empty list when backend is not available
         isLoading: false,
         error: 'Failed to connect to backend: $e\n\nPlease ensure the backend is running.',
       );

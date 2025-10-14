@@ -3,9 +3,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:table_calendar/table_calendar.dart';
 import '../../models/attendance.dart';
 import '../../providers/attendance_provider.dart';
+import '../../providers/driver_provider.dart';
 import '../../utils/debug_utils.dart';
 import 'attendance_detail_screen.dart';
 import 'check_in_out_screen.dart';
+import 'attendance_analytics_screen.dart';
+import '../../models/driver.dart';
 
 class AttendanceListScreen extends ConsumerStatefulWidget {
   const AttendanceListScreen({super.key});
@@ -29,6 +32,11 @@ class _AttendanceListScreenState extends ConsumerState<AttendanceListScreen>
     super.initState();
     _tabController = TabController(length: 5, vsync: this);
     _selectedDay = DateTime.now();
+    
+    // Force reload attendance data when screen opens
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      ref.read(attendanceProvider.notifier).loadAttendances();
+    });
   }
 
   @override
@@ -292,7 +300,7 @@ class _AttendanceListScreenState extends ConsumerState<AttendanceListScreen>
             child: TabBarView(
               controller: _tabController,
               children: [
-                _buildAttendanceList(filteredAttendances, 'all'),
+                _buildAllAttendanceView(),
                 _buildAttendanceList(todayAttendances, 'today'),
                 _buildAttendanceList(thisMonthAttendances, 'month'),
                 _buildWorkingDriversList(driversWorking),
@@ -436,6 +444,60 @@ class _AttendanceListScreenState extends ConsumerState<AttendanceListScreen>
     );
   }
 
+  Widget _buildAllAttendanceView() {
+    final attendanceState = ref.watch(attendanceProvider);
+    final filteredAttendances = _searchQuery.isNotEmpty 
+        ? ref.read(attendanceProvider.notifier).searchAttendances(_searchQuery)
+        : attendanceState.attendances;
+
+    return Column(
+      children: [
+        // Quick Actions Row
+        Container(
+          padding: const EdgeInsets.all(16),
+          child: Row(
+            children: [
+              Expanded(
+                child: ElevatedButton.icon(
+                  onPressed: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => const AttendanceAnalyticsScreen(),
+                      ),
+                    );
+                  },
+                  icon: const Icon(Icons.analytics),
+                  label: const Text('Advanced Analytics'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF1565C0),
+                    foregroundColor: Colors.white,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: () => _show7DayView(),
+                  icon: const Icon(Icons.calendar_view_week),
+                  label: const Text('7-Day View'),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: const Color(0xFF1565C0),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        
+        // Attendance List
+        Expanded(
+          child: _buildAttendanceListWithCounts(filteredAttendances, 'all'),
+        ),
+      ],
+    );
+  }
+
   Widget _buildAnalyticsTab() {
     final attendanceStats = ref.watch(attendanceStatsProvider);
     final summaries = ref.watch(attendanceSummariesProvider);
@@ -445,6 +507,53 @@ class _AttendanceListScreenState extends ConsumerState<AttendanceListScreen>
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // Quick Access to Advanced Analytics
+          Card(
+            elevation: 2,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                children: [
+                  const Row(
+                    children: [
+                      Icon(Icons.rocket_launch, color: Color(0xFF1565C0)),
+                      SizedBox(width: 8),
+                      Text(
+                        'Advanced Features',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          color: Color(0xFF1565C0),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  ElevatedButton.icon(
+                    onPressed: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => const AttendanceAnalyticsScreen(),
+                        ),
+                      );
+                    },
+                    icon: const Icon(Icons.analytics),
+                    label: const Text('Open Attendance Analytics'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF1565C0),
+                      foregroundColor: Colors.white,
+                      minimumSize: const Size(double.infinity, 48),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          
+          const SizedBox(height: 16),
+          
           // Overall Stats
           _buildAnalyticsCard(
             'Overall Statistics',
@@ -693,6 +802,251 @@ class _AttendanceListScreenState extends ConsumerState<AttendanceListScreen>
       default: return 'Try adjusting your search or filters';
     }
   }
+
+  void _show7DayView() {
+    final now = DateTime.now();
+    final startOfWeek = now.subtract(Duration(days: now.weekday - 1));
+    
+    showDialog(
+      context: context,
+      builder: (context) => Dialog(
+        child: Container(
+          width: MediaQuery.of(context).size.width * 0.9,
+          height: MediaQuery.of(context).size.height * 0.8,
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            children: [
+              Row(
+                children: [
+                  const Icon(Icons.calendar_view_week, color: Color(0xFF1565C0)),
+                  const SizedBox(width: 8),
+                  const Text(
+                    '7-Day Attendance View',
+                    style: TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                      color: Color(0xFF1565C0),
+                    ),
+                  ),
+                  const Spacer(),
+                  IconButton(
+                    onPressed: () => Navigator.pop(context),
+                    icon: const Icon(Icons.close),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              Expanded(
+                child: _build7DayTable(startOfWeek),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _build7DayTable(DateTime startOfWeek) {
+    final attendances = ref.watch(attendanceProvider).attendances;
+    final drivers = ref.watch(driverProvider).drivers.where((d) => d.status == DriverStatus.active).toList();
+    final weekDays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+    
+    return SingleChildScrollView(
+      child: DataTable(
+        columns: [
+          const DataColumn(
+            label: Text('Driver', style: TextStyle(fontWeight: FontWeight.bold)),
+          ),
+          ...weekDays.asMap().entries.map((entry) {
+            final dayIndex = entry.key;
+            final dayName = entry.value;
+            final date = startOfWeek.add(Duration(days: dayIndex));
+            
+            return DataColumn(
+              label: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(dayName, style: const TextStyle(fontWeight: FontWeight.bold)),
+                  Text(
+                    '${date.day}/${date.month}',
+                    style: const TextStyle(fontSize: 12, color: Colors.grey),
+                  ),
+                ],
+              ),
+            );
+          }).toList(),
+        ],
+        rows: drivers.map((driver) {
+          return DataRow(
+            cells: [
+              DataCell(
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      driver.fullName,
+                      style: const TextStyle(fontWeight: FontWeight.w600),
+                    ),
+                    Text(
+                      driver.employeeId,
+                      style: const TextStyle(fontSize: 12, color: Colors.grey),
+                    ),
+                  ],
+                ),
+              ),
+              ...List.generate(7, (dayIndex) {
+                final date = startOfWeek.add(Duration(days: dayIndex));
+                final dayAttendance = attendances.firstWhere(
+                  (att) => att.driverId == driver.id && 
+                           att.date.year == date.year &&
+                           att.date.month == date.month &&
+                           att.date.day == date.day,
+                  orElse: () => Attendance(
+                    id: '',
+                    driverId: '',
+                    driverName: '',
+                    driverEmployeeId: '',
+                    date: DateTime.now(),
+                    status: AttendanceStatus.absent,
+                    createdAt: DateTime.now(),
+                    updatedAt: DateTime.now(),
+                  ),
+                );
+                
+                return DataCell(
+                  dayAttendance.id.isNotEmpty
+                      ? Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: dayAttendance.status.color.withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: Text(
+                            dayAttendance.status.icon,
+                            style: TextStyle(color: dayAttendance.status.color),
+                          ),
+                        )
+                      : const Text('-', style: TextStyle(color: Colors.grey)),
+                );
+              }),
+            ],
+          );
+        }).toList(),
+      ),
+    );
+  }
+
+  Widget _buildAttendanceListWithCounts(List<Attendance> attendances, String type) {
+    // Group attendances by driver to show counts
+    final driverAttendanceMap = <String, List<Attendance>>{};
+    for (final attendance in attendances) {
+      driverAttendanceMap.putIfAbsent(attendance.driverId, () => []).add(attendance);
+    }
+    
+    return RefreshIndicator(
+      onRefresh: () async {
+        await ref.read(attendanceProvider.notifier).loadAttendances();
+      },
+      child: attendances.isEmpty
+          ? Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    _getEmptyStateIcon(type),
+                    size: 64,
+                    color: Colors.grey,
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    _getEmptyStateMessage(type),
+                    style: const TextStyle(fontSize: 18, color: Colors.grey),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    _getEmptyStateSubMessage(type),
+                    style: const TextStyle(color: Colors.grey),
+                    textAlign: TextAlign.center,
+                  ),
+                ],
+              ),
+            )
+          : ListView.builder(
+              padding: const EdgeInsets.all(16),
+              itemCount: attendances.length,
+              itemBuilder: (context, index) {
+                final attendance = attendances[index];
+                final driverAttendances = driverAttendanceMap[attendance.driverId] ?? [];
+                
+                // Calculate stats
+                final presentCount = driverAttendances.where((a) => a.status == AttendanceStatus.present).length;
+                final absentCount = driverAttendances.where((a) => a.status == AttendanceStatus.absent).length;
+                final lateCount = driverAttendances.where((a) => a.status == AttendanceStatus.late).length;
+                
+                return _AttendanceCardWithCounts(
+                  attendance: attendance,
+                  presentCount: presentCount,
+                  absentCount: absentCount,
+                  lateCount: lateCount,
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => AttendanceDetailScreen(attendance: attendance),
+                      ),
+                    );
+                  },
+                  onDelete: () => _showDeleteAttendanceDialog(attendance),
+                );
+              },
+            ),
+    );
+  }
+
+  void _showDeleteAttendanceDialog(Attendance attendance) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Row(
+          children: [
+            Icon(Icons.delete_forever, color: Colors.red),
+            SizedBox(width: 8),
+            Text('Delete Attendance Record'),
+          ],
+        ),
+        content: Text(
+          'Are you sure you want to delete the attendance record for ${attendance.driverName} on ${attendance.formattedDate}?\n\nThis action cannot be undone.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              Navigator.pop(context);
+              final success = await ref.read(attendanceProvider.notifier).deleteAttendance(attendance.id);
+              if (mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text(
+                      success
+                          ? 'Attendance record deleted successfully'
+                          : 'Failed to delete attendance record',
+                    ),
+                    backgroundColor: success ? Colors.green : Colors.red,
+                  ),
+                );
+              }
+            },
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            child: const Text('Delete', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 class _AttendanceCard extends StatelessWidget {
@@ -841,6 +1195,229 @@ class _AttendanceCard extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+class _AttendanceCardWithCounts extends StatefulWidget {
+  final Attendance attendance;
+  final int presentCount;
+  final int absentCount;
+  final int lateCount;
+  final VoidCallback onTap;
+  final VoidCallback onDelete;
+
+  const _AttendanceCardWithCounts({
+    required this.attendance,
+    required this.presentCount,
+    required this.absentCount,
+    required this.lateCount,
+    required this.onTap,
+    required this.onDelete,
+  });
+
+  @override
+  State<_AttendanceCardWithCounts> createState() => _AttendanceCardWithCountsState();
+}
+
+class _AttendanceCardWithCountsState extends State<_AttendanceCardWithCounts> {
+  bool _isSelected = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      margin: const EdgeInsets.only(bottom: 16),
+      elevation: 2,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: InkWell(
+        onTap: widget.onTap,
+        borderRadius: BorderRadius.circular(12),
+        child: Container(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(12),
+            border: _isSelected ? Border.all(color: Colors.blue, width: 2) : null,
+          ),
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    // Checkbox for delete
+                    Checkbox(
+                      value: _isSelected,
+                      onChanged: (value) {
+                        setState(() {
+                          _isSelected = value ?? false;
+                        });
+                      },
+                    ),
+                    
+                    // Driver Avatar
+                    Container(
+                      width: 50,
+                      height: 50,
+                      decoration: BoxDecoration(
+                        color: widget.attendance.status.color.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(25),
+                      ),
+                      child: Center(
+                        child: Text(
+                          widget.attendance.driverName.split(' ').map((n) => n[0]).join(''),
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                            color: widget.attendance.status.color,
+                          ),
+                        ),
+                      ),
+                    ),
+                    
+                    const SizedBox(width: 12),
+                    
+                    // Driver Info
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            widget.attendance.driverName,
+                            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            '${widget.attendance.driverEmployeeId} • ${widget.attendance.formattedDate}',
+                            style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                          ),
+                        ],
+                      ),
+                    ),
+                    
+                    // Status Badge
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: widget.attendance.status.color.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: widget.attendance.status.color.withOpacity(0.3)),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(widget.attendance.status.icon, style: const TextStyle(fontSize: 12)),
+                          const SizedBox(width: 4),
+                          Text(
+                            widget.attendance.statusDisplayText,
+                            style: TextStyle(
+                              color: widget.attendance.status.color,
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    
+                    // Delete Button
+                    if (_isSelected)
+                      IconButton(
+                        onPressed: widget.onDelete,
+                        icon: const Icon(Icons.delete, color: Colors.red),
+                        tooltip: 'Delete',
+                      ),
+                  ],
+                ),
+                
+                const SizedBox(height: 12),
+                const Divider(),
+                const SizedBox(height: 8),
+                
+                // Attendance Counts
+                Row(
+                  children: [
+                    _buildCountChip('Present', widget.presentCount, Colors.green),
+                    const SizedBox(width: 8),
+                    _buildCountChip('Absent', widget.absentCount, Colors.red),
+                    const SizedBox(width: 8),
+                    _buildCountChip('Late', widget.lateCount, Colors.orange),
+                    const Spacer(),
+                    // Time Information
+                    _buildTimeInfo(
+                      'Hours',
+                      widget.attendance.workingTimeFormatted,
+                      Icons.schedule,
+                      Colors.blue,
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+  
+  Widget _buildCountChip(String label, int count, Color color) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: color.withOpacity(0.3)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 6,
+            height: 6,
+            decoration: BoxDecoration(
+              color: color,
+              shape: BoxShape.circle,
+            ),
+          ),
+          const SizedBox(width: 4),
+          Text(
+            '$count',
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: color,
+            ),
+          ),
+          const SizedBox(width: 2),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 10,
+              color: color.withOpacity(0.8),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTimeInfo(String label, String value, IconData icon, Color color) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, size: 14, color: color),
+        const SizedBox(width: 4),
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(label, style: const TextStyle(fontSize: 10, color: Colors.grey)),
+            Text(
+              value,
+              style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: color),
+            ),
+          ],
+        ),
+      ],
     );
   }
 }

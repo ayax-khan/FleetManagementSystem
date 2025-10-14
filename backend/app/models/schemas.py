@@ -66,13 +66,20 @@ class DriverBase(BaseModel):
     """Base driver model"""
     name: str = Field(..., min_length=1, max_length=100)
     employee_id: Optional[str] = None
+    cnic: Optional[str] = None  # National ID
     license_number: str = Field(..., min_length=1)
     license_expiry: Optional[str] = None
+    license_category: Optional[str] = Field(default="lightVehicle")
     phone: Optional[str] = None
+    email: Optional[str] = None
     emergency_contact: Optional[str] = None
     address: Optional[str] = None
+    date_of_birth: Optional[str] = None
     joining_date: Optional[str] = None
+    basic_salary: Optional[float] = Field(default=50000.0, ge=0)
     assigned_vehicle: Optional[str] = None
+    category: Optional[str] = Field(default="regular")
+    notes: Optional[str] = None
     status: str = Field(default="active")
 
 class DriverCreate(DriverBase):
@@ -83,13 +90,20 @@ class DriverUpdate(BaseModel):
     """Driver update model"""
     name: Optional[str] = None
     employee_id: Optional[str] = None
+    cnic: Optional[str] = None
     license_number: Optional[str] = None
     license_expiry: Optional[str] = None
+    license_category: Optional[str] = None
     phone: Optional[str] = None
+    email: Optional[str] = None
     emergency_contact: Optional[str] = None
     address: Optional[str] = None
+    date_of_birth: Optional[str] = None
     joining_date: Optional[str] = None
+    basic_salary: Optional[float] = None
     assigned_vehicle: Optional[str] = None
+    category: Optional[str] = None
+    notes: Optional[str] = None
     status: Optional[str] = None
 
 class Driver(DriverBase):
