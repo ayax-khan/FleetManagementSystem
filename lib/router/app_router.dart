@@ -4,7 +4,7 @@ import '../screens/dashboard_screen.dart';
 import '../screens/vehicles/vehicle_list_screen.dart';
 import '../screens/drivers/driver_list_screen.dart';
 import '../screens/jobs/job_list_screen.dart';
-import '../screens/attendance/attendance_list_screen.dart';
+import '../screens/attendance/new_attendance_screen.dart';
 import '../screens/fuel/fuel_list_screen.dart';
 import '../screens/import/import_screen.dart';
 
@@ -59,7 +59,7 @@ class AppRouter {
         return _buildPageRoute(
           const MainLayout(
             title: 'Attendance',
-            child: AttendanceListScreen(),
+            child: NewAttendanceScreen(),
           ),
           settings,
         );

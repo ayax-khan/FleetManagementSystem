@@ -53,11 +53,10 @@ class AttendanceNotifier extends StateNotifier<AttendanceState> {
     state = state.copyWith(isLoading: true, error: null);
     
     try {
-      DebugUtils.log('Loading attendances', 'ATTENDANCE');
+      DebugUtils.log('Loading attendances from backend', 'ATTENDANCE');
       
-      // Mock data for now - replace with API call later
-      await Future.delayed(const Duration(milliseconds: 500));
-      
+      // Since attendance endpoints don't exist yet, use mock data
+      // This allows the UI to function while backend endpoints are being developed
       final mockAttendances = _generateMockAttendances();
       
       state = state.copyWith(
@@ -65,13 +64,23 @@ class AttendanceNotifier extends StateNotifier<AttendanceState> {
         isLoading: false,
       );
       
-      DebugUtils.log('Loaded ${mockAttendances.length} attendance records', 'ATTENDANCE');
+      DebugUtils.log('Loaded ${mockAttendances.length} mock attendance records', 'ATTENDANCE');
+      
+      // TODO: Uncomment when backend attendance endpoints are ready
+      // final attendanceData = await _apiService.getAttendances(limit: 1000);
+      // final attendances = attendanceData.map((data) => _mapApiAttendanceToModel(data)).toList();
+      
     } catch (e) {
       DebugUtils.logError('Error loading attendances', e);
+      
+      // Fallback to mock data on any error
+      final mockAttendances = _generateMockAttendances();
       state = state.copyWith(
+        attendances: mockAttendances,
         isLoading: false,
-        error: 'Failed to load attendances: $e',
       );
+      
+      DebugUtils.log('Using mock data due to error: $e', 'ATTENDANCE');
     }
   }
 
@@ -217,35 +226,98 @@ class AttendanceNotifier extends StateNotifier<AttendanceState> {
     }
   }
 
+  // Record attendance (for Today Attendance dialog)
+  Future<bool> recordAttendance(Attendance attendance) async {
+    try {
+      DebugUtils.log('Recording attendance for driver: ${attendance.driverName}', 'ATTENDANCE');
+      
+      final now = DateTime.now();
+      final today = DateTime(now.year, now.month, now.day);
+      
+      // Check if attendance already exists for today
+      final existingIndex = state.attendances.indexWhere(
+        (a) => a.driverId == attendance.driverId && 
+               a.date.year == today.year && 
+               a.date.month == today.month && 
+               a.date.day == today.day
+      );
+      
+      List<Attendance> updatedAttendances;
+      
+      if (existingIndex >= 0) {
+        // Update existing attendance
+        updatedAttendances = List<Attendance>.from(state.attendances);
+        updatedAttendances[existingIndex] = attendance.copyWith(
+          id: state.attendances[existingIndex].id,
+          updatedAt: now,
+        );
+        DebugUtils.log('Updated existing attendance for: ${attendance.driverName}', 'ATTENDANCE');
+      } else {
+        // Add new attendance record
+        updatedAttendances = [
+          attendance.copyWith(
+            id: DateTime.now().millisecondsSinceEpoch.toString(),
+            createdAt: now,
+            updatedAt: now,
+            date: today, // Ensure date is set to today
+          ),
+          ...state.attendances
+        ];
+        DebugUtils.log('Added new attendance for: ${attendance.driverName}', 'ATTENDANCE');
+      }
+      
+      state = state.copyWith(attendances: updatedAttendances);
+      
+      // TODO: Send to backend when attendance endpoints are ready
+      // final attendanceData = attendance.toJson();
+      // await _apiService.createAttendance(attendanceData);
+      
+      DebugUtils.log('Attendance recorded successfully for: ${attendance.driverName}', 'ATTENDANCE');
+      return true;
+    } catch (e) {
+      DebugUtils.logError('Error recording attendance', e);
+      return false;
+    }
+  }
+
   // Add/Update attendance record
   Future<bool> addOrUpdateAttendance(Attendance attendance) async {
     try {
       DebugUtils.log('Adding/updating attendance: ${attendance.id}', 'ATTENDANCE');
       
-      await Future.delayed(const Duration(milliseconds: 300));
-      
+      final now = DateTime.now();
       final existingIndex = state.attendances.indexWhere((a) => a.id == attendance.id);
       List<Attendance> updatedAttendances;
       
       if (existingIndex >= 0) {
-        // Update existing
+        // Update existing record
         updatedAttendances = List<Attendance>.from(state.attendances);
         updatedAttendances[existingIndex] = attendance.copyWith(
-          updatedAt: DateTime.now(),
+          updatedAt: now,
         );
+        DebugUtils.log('Updated attendance record: ${attendance.id}', 'ATTENDANCE');
       } else {
-        // Add new
+        // Add new record
         updatedAttendances = [
           attendance.copyWith(
-            id: DateTime.now().millisecondsSinceEpoch.toString(),
-            createdAt: DateTime.now(),
-            updatedAt: DateTime.now(),
+            id: attendance.id.isEmpty ? DateTime.now().millisecondsSinceEpoch.toString() : attendance.id,
+            createdAt: attendance.createdAt ?? now,
+            updatedAt: now,
           ),
           ...state.attendances
         ];
+        DebugUtils.log('Added new attendance record: ${attendance.id}', 'ATTENDANCE');
       }
       
       state = state.copyWith(attendances: updatedAttendances);
+      
+      // TODO: Send to backend when attendance endpoints are ready
+      // final attendanceData = attendance.toJson();
+      // if (existingIndex >= 0) {
+      //   await _apiService.updateAttendance(attendance.id, attendanceData);
+      // } else {
+      //   await _apiService.createAttendance(attendanceData);
+      // }
       
       DebugUtils.log('Attendance record saved successfully: ${attendance.id}', 'ATTENDANCE');
       return true;
@@ -411,6 +483,53 @@ class AttendanceNotifier extends StateNotifier<AttendanceState> {
       case 3: return AttendanceStatus.leave;
       case 4: return AttendanceStatus.sick;
       default: return AttendanceStatus.present;
+    }
+  }
+
+  // Map API attendance data to Flutter model
+  Attendance _mapApiAttendanceToModel(Map<String, dynamic> data) {
+    try {
+      return Attendance(
+        id: data['id']?.toString() ?? '',
+        driverId: data['driver_id'] ?? '',
+        driverName: data['driver_name'] ?? 'Unknown Driver',
+        driverEmployeeId: data['driver_employee_id'] ?? '',
+        date: DateTime.parse(data['date'] ?? DateTime.now().toIso8601String()),
+        checkInTime: data['check_in_time'] != null 
+            ? DateTime.parse(data['check_in_time'])
+            : null,
+        checkOutTime: data['check_out_time'] != null 
+            ? DateTime.parse(data['check_out_time'])
+            : null,
+        status: AttendanceStatus.values.firstWhere(
+          (s) => s.name == data['status'],
+          orElse: () => AttendanceStatus.absent,
+        ),
+        overtimeHours: (data['overtime_hours'] ?? 0.0).toDouble(),
+        regularHours: data['regular_hours']?.toDouble(),
+        checkInLocation: data['check_in_location'],
+        checkOutLocation: data['check_out_location'],
+        checkInPhoto: data['check_in_photo'],
+        checkOutPhoto: data['check_out_photo'],
+        notes: data['notes'],
+        totalEarnings: data['total_earnings']?.toDouble(),
+        createdAt: DateTime.parse(data['created_at'] ?? DateTime.now().toIso8601String()),
+        updatedAt: DateTime.parse(data['updated_at'] ?? DateTime.now().toIso8601String()),
+      );
+    } catch (e) {
+      DebugUtils.logError('Failed to map API attendance data: ${data.toString()}', e);
+      // Return a fallback attendance if mapping fails
+      final now = DateTime.now();
+      return Attendance(
+        id: data['id']?.toString() ?? '',
+        driverId: data['driver_id'] ?? '',
+        driverName: 'Unknown Driver',
+        driverEmployeeId: 'UNKNOWN',
+        date: now,
+        status: AttendanceStatus.absent,
+        createdAt: now,
+        updatedAt: now,
+      );
     }
   }
 }

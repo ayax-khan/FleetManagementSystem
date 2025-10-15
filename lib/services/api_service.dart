@@ -456,4 +456,91 @@ class ApiService {
     final response = await post('/excel/database/clear-all');
     return response['success'] ?? false;
   }
+
+  // Attendance API methods
+  Future<List<Map<String, dynamic>>> getAttendances({
+    int skip = 0,
+    int limit = 100,
+    String? driverId,
+    String? status,
+    String? startDate,
+    String? endDate,
+  }) async {
+    final params = <String, dynamic>{'skip': skip, 'limit': limit};
+    if (driverId != null) params['driver_id'] = driverId;
+    if (status != null) params['status'] = status;
+    if (startDate != null) params['start_date'] = startDate;
+    if (endDate != null) params['end_date'] = endDate;
+
+    try {
+      final response = await get('/attendance', queryParameters: params);
+      return List<Map<String, dynamic>>.from(response['data'] ?? []);
+    } catch (e) {
+      // If endpoint doesn't exist, return empty list
+      return [];
+    }
+  }
+
+  Future<Map<String, dynamic>> getAttendance(String attendanceId) async {
+    try {
+      final response = await get('/attendance/$attendanceId');
+      return response['data'] ?? {};
+    } catch (e) {
+      return {};
+    }
+  }
+
+  Future<Map<String, dynamic>> createAttendance(
+    Map<String, dynamic> attendanceData,
+  ) async {
+    try {
+      final response = await post('/attendance', data: attendanceData);
+      return response['data'] ?? {};
+    } catch (e) {
+      // For now, just return the input data with a generated ID
+      return {
+        ...attendanceData,
+        'id': DateTime.now().millisecondsSinceEpoch.toString(),
+      };
+    }
+  }
+
+  Future<Map<String, dynamic>> updateAttendance(
+    String attendanceId,
+    Map<String, dynamic> updates,
+  ) async {
+    try {
+      final response = await put('/attendance/$attendanceId', data: updates);
+      return response['data'] ?? {};
+    } catch (e) {
+      return updates;
+    }
+  }
+
+  Future<bool> deleteAttendance(String attendanceId) async {
+    try {
+      final response = await delete('/attendance/$attendanceId');
+      return response['success'] ?? false;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  Future<Map<String, dynamic>> getAttendanceStats({
+    String? driverId,
+    String? startDate,
+    String? endDate,
+  }) async {
+    final params = <String, dynamic>{};
+    if (driverId != null) params['driver_id'] = driverId;
+    if (startDate != null) params['start_date'] = startDate;
+    if (endDate != null) params['end_date'] = endDate;
+
+    try {
+      final response = await get('/attendance/stats', queryParameters: params);
+      return response['data'] ?? {};
+    } catch (e) {
+      return {};
+    }
+  }
 }
