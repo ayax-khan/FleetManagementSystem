@@ -21,6 +21,8 @@ class _DriverListScreenState extends ConsumerState<DriverListScreen>
   DriverStatus? _statusFilter;
   DriverCategory? _categoryFilter;
   late TabController _tabController;
+  final Set<String> _selectedDriverIds = {};
+  bool _isSelectionMode = false;
 
   @override
   void initState() {
@@ -344,18 +346,117 @@ class _DriverListScreenState extends ConsumerState<DriverListScreen>
           ),
         ],
       ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: _categoryFilter != null ? () => _showAddDriverDialog(_categoryFilter!) : null,
-        backgroundColor: _categoryFilter != null ? const Color(0xFF1565C0) : Colors.grey,
-        foregroundColor: Colors.white,
-        icon: const Icon(Icons.add),
-        label: Text(_categoryFilter != null ? 'Add Driver' : 'Select Category First'),
-      ),
+      floatingActionButton: _isSelectionMode && _selectedDriverIds.isNotEmpty
+          ? FloatingActionButton.extended(
+              onPressed: () => _showBulkDeleteDialog(),
+              backgroundColor: Colors.red,
+              foregroundColor: Colors.white,
+              icon: const Icon(Icons.delete_sweep),
+              label: Text('Delete ${_selectedDriverIds.length}'),
+            )
+          : FloatingActionButton.extended(
+              onPressed: _categoryFilter != null ? () => _showAddDriverDialog(_categoryFilter!) : null,
+              backgroundColor: _categoryFilter != null ? const Color(0xFF1565C0) : Colors.grey,
+              foregroundColor: Colors.white,
+              icon: const Icon(Icons.add),
+              label: Text(_categoryFilter != null ? 'Add Driver' : 'Select Category First'),
+            ),
     );
   }
 
   Widget _buildDriverList(List<Driver> drivers, DriverState driverState, String type) {
-    return RefreshIndicator(
+    return Column(
+      children: [
+        // Selection Controls
+        if (drivers.isNotEmpty)
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            decoration: BoxDecoration(
+              color: Colors.grey[100],
+              border: Border(
+                bottom: BorderSide(color: Colors.grey[300]!),
+              ),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                if (!_isSelectionMode)
+                  Text(
+                    '${drivers.length} driver(s)',
+                    style: const TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.grey,
+                    ),
+                  )
+                else
+                  Text(
+                    '${_selectedDriverIds.length} selected',
+                    style: const TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: Color(0xFF1565C0),
+                    ),
+                  ),
+                Row(
+                  children: [
+                    if (!_isSelectionMode)
+                      TextButton.icon(
+                        onPressed: () {
+                          setState(() {
+                            _isSelectionMode = true;
+                          });
+                        },
+                        icon: const Icon(Icons.checklist, size: 18),
+                        label: const Text('Select'),
+                        style: TextButton.styleFrom(
+                          foregroundColor: const Color(0xFF1565C0),
+                        ),
+                      ),
+                    if (_isSelectionMode) ...[
+                      TextButton.icon(
+                        onPressed: () {
+                          setState(() {
+                            if (_selectedDriverIds.length == drivers.length) {
+                              _selectedDriverIds.clear();
+                            } else {
+                              _selectedDriverIds.addAll(drivers.map((d) => d.id));
+                            }
+                          });
+                        },
+                        icon: Icon(
+                          _selectedDriverIds.length == drivers.length
+                              ? Icons.check_box
+                              : Icons.check_box_outline_blank,
+                          size: 18,
+                        ),
+                        label: const Text('Select All'),
+                        style: TextButton.styleFrom(
+                          foregroundColor: const Color(0xFF1565C0),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      TextButton.icon(
+                        onPressed: () {
+                          setState(() {
+                            _isSelectionMode = false;
+                            _selectedDriverIds.clear();
+                          });
+                        },
+                        icon: const Icon(Icons.close, size: 18),
+                        label: const Text('Cancel'),
+                        style: TextButton.styleFrom(
+                          foregroundColor: Colors.grey,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ],
+            ),
+          ),
+        Expanded(
+          child: RefreshIndicator(
       onRefresh: () async {
         await ref.read(driverProvider.notifier).loadDrivers();
       },
@@ -411,23 +512,36 @@ class _DriverListScreenState extends ConsumerState<DriverListScreen>
                       padding: const EdgeInsets.all(12),
                       gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                         crossAxisCount: _getCrossAxisCount(context),
-                        childAspectRatio: 0.75, // Smaller card height
+                        childAspectRatio: 1.0,
                         crossAxisSpacing: 12,
                         mainAxisSpacing: 12,
                       ),
                       itemCount: drivers.length,
                       itemBuilder: (context, index) {
                         final driver = drivers[index];
+                        final isSelected = _selectedDriverIds.contains(driver.id);
                         return _DriverCard(
                           driver: driver,
+                          isSelectionMode: _isSelectionMode,
+                          isSelected: isSelected,
                           onTap: () {
-                            ref.read(driverProvider.notifier).selectDriver(driver);
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (context) => DriverDetailScreen(driver: driver),
-                              ),
-                            );
+                            if (_isSelectionMode) {
+                              setState(() {
+                                if (isSelected) {
+                                  _selectedDriverIds.remove(driver.id);
+                                } else {
+                                  _selectedDriverIds.add(driver.id);
+                                }
+                              });
+                            } else {
+                              ref.read(driverProvider.notifier).selectDriver(driver);
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (context) => DriverDetailScreen(driver: driver),
+                                ),
+                              );
+                            }
                           },
                           onEdit: () {
                             _showEditDriverDialog(driver);
@@ -438,6 +552,9 @@ class _DriverListScreenState extends ConsumerState<DriverListScreen>
                         );
                       },
                     ),
+          ),
+        ),
+      ],
     );
   }
 
@@ -681,6 +798,105 @@ class _DriverListScreenState extends ConsumerState<DriverListScreen>
     showDialog(
       context: context,
       builder: (context) => _EditDriverDialog(driver: driver),
+    );
+  }
+
+  void _showBulkDeleteDialog() {
+    showDialog(
+      context: context,
+      builder: (BuildContext dialogContext) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          title: const Row(
+            children: [
+              Icon(Icons.delete_sweep, color: Colors.red, size: 28),
+              SizedBox(width: 8),
+              Text(
+                'Delete Multiple Drivers',
+                style: TextStyle(
+                  color: Colors.red,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ],
+          ),
+          content: Text(
+            'Are you sure you want to delete ${_selectedDriverIds.length} driver(s)?\n\nThis action cannot be undone.',
+            style: const TextStyle(fontSize: 16),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
+            ),
+            ElevatedButton(
+              onPressed: () async {
+                Navigator.of(dialogContext).pop();
+
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Row(
+                        children: [
+                          SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Colors.white,
+                            ),
+                          ),
+                          SizedBox(width: 16),
+                          Text('Deleting drivers...'),
+                        ],
+                      ),
+                      duration: Duration(seconds: 30),
+                    ),
+                  );
+                }
+
+                int successCount = 0;
+                final driverNotifier = ref.read(driverProvider.notifier);
+                
+                for (final driverId in _selectedDriverIds) {
+                  final success = await driverNotifier.deleteDriver(driverId);
+                  if (success) successCount++;
+                }
+
+                if (mounted) {
+                  ScaffoldMessenger.of(context).hideCurrentSnackBar();
+
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(
+                        successCount == _selectedDriverIds.length
+                            ? 'Successfully deleted $successCount driver(s)'
+                            : 'Deleted $successCount of ${_selectedDriverIds.length} driver(s)',
+                      ),
+                      backgroundColor:
+                          successCount == _selectedDriverIds.length
+                              ? Colors.green
+                              : Colors.orange,
+                    ),
+                  );
+
+                  setState(() {
+                    _selectedDriverIds.clear();
+                    _isSelectionMode = false;
+                  });
+                }
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.red,
+                foregroundColor: Colors.white,
+              ),
+              child: const Text('Delete All'),
+            ),
+          ],
+        );
+      },
     );
   }
 }
@@ -1262,12 +1478,16 @@ class _DriverCard extends StatefulWidget {
   final VoidCallback onTap;
   final VoidCallback onEdit;
   final VoidCallback onDelete;
+  final bool isSelectionMode;
+  final bool isSelected;
 
   const _DriverCard({
     required this.driver,
     required this.onTap,
     required this.onEdit,
     required this.onDelete,
+    this.isSelectionMode = false,
+    this.isSelected = false,
   });
 
   @override
@@ -1344,7 +1564,17 @@ class _DriverCardState extends State<_DriverCard>
               child: InkWell(
                 onTap: widget.onTap,
                 borderRadius: BorderRadius.circular(16),
-                child: Column(
+                child: Container(
+                  decoration: widget.isSelected
+                      ? BoxDecoration(
+                          border: Border.all(
+                            color: const Color(0xFF1565C0),
+                            width: 3,
+                          ),
+                          borderRadius: BorderRadius.circular(16),
+                        )
+                      : null,
+                  child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     // Header with gradient background
@@ -1369,13 +1599,22 @@ class _DriverCardState extends State<_DriverCard>
                           ),
                         ),
                       ),
-                      padding: const EdgeInsets.all(16),
+                      padding: const EdgeInsets.all(12),
                       child: Row(
                         children: [
+                          // Checkbox in selection mode
+                          if (widget.isSelectionMode) ...[
+                            Checkbox(
+                              value: widget.isSelected,
+                              onChanged: (_) => widget.onTap(),
+                              activeColor: const Color(0xFF1565C0),
+                            ),
+                            const SizedBox(width: 6),
+                          ],
                           // Driver Avatar
                           Container(
-                            width: 48,
-                            height: 48,
+                            width: 40,
+                            height: 40,
                             decoration: BoxDecoration(
                               gradient: const LinearGradient(
                                 begin: Alignment.topLeft,
@@ -1391,7 +1630,7 @@ class _DriverCardState extends State<_DriverCard>
                               child: Text(
                                 '${widget.driver.firstName[0]}${widget.driver.lastName[0]}',
                                 style: const TextStyle(
-                                  fontSize: 18,
+                                  fontSize: 16,
                                   fontWeight: FontWeight.bold,
                                   color: Colors.white,
                                 ),
@@ -1399,7 +1638,7 @@ class _DriverCardState extends State<_DriverCard>
                             ),
                           ),
                           
-                          const SizedBox(width: 12),
+                          const SizedBox(width: 10),
                           
                           // Driver Info
                           Expanded(
@@ -1409,17 +1648,17 @@ class _DriverCardState extends State<_DriverCard>
                                 Text(
                                   widget.driver.fullName,
                                   style: const TextStyle(
-                                    fontSize: 16,
+                                    fontSize: 14,
                                     fontWeight: FontWeight.bold,
                                     color: Color(0xFF1F2937),
                                   ),
                                   overflow: TextOverflow.ellipsis,
                                 ),
-                                const SizedBox(height: 4),
+                                const SizedBox(height: 2),
                                 Text(
                                   '${widget.driver.employeeId} • ${widget.driver.category.displayName}',
                                   style: const TextStyle(
-                                    fontSize: 12,
+                                    fontSize: 11,
                                     color: Color(0xFF6B7280),
                                   ),
                                   overflow: TextOverflow.ellipsis,
@@ -1431,17 +1670,17 @@ class _DriverCardState extends State<_DriverCard>
                           // Status Badge
                           Container(
                             padding: const EdgeInsets.symmetric(
-                              horizontal: 8, 
-                              vertical: 4,
+                              horizontal: 6, 
+                              vertical: 3,
                             ),
                             decoration: BoxDecoration(
                               color: _getStatusColor(widget.driver.status),
-                              borderRadius: BorderRadius.circular(12),
+                              borderRadius: BorderRadius.circular(10),
                             ),
                             child: Text(
                               widget.driver.status.displayName,
                               style: const TextStyle(
-                                fontSize: 10,
+                                fontSize: 9,
                                 fontWeight: FontWeight.w600,
                                 color: Colors.white,
                               ),
@@ -1454,7 +1693,7 @@ class _DriverCardState extends State<_DriverCard>
                     // Content
                     Expanded(
                       child: Padding(
-                        padding: const EdgeInsets.all(16),
+                        padding: const EdgeInsets.all(12),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
@@ -1463,15 +1702,15 @@ class _DriverCardState extends State<_DriverCard>
                               children: [
                                 const Icon(
                                   Icons.phone,
-                                  size: 16,
+                                  size: 14,
                                   color: Color(0xFF6B7280),
                                 ),
-                                const SizedBox(width: 8),
+                                const SizedBox(width: 6),
                                 Expanded(
                                   child: Text(
                                     widget.driver.phoneNumber,
                                     style: const TextStyle(
-                                      fontSize: 13,
+                                      fontSize: 12,
                                       color: Color(0xFF1F2937),
                                       fontWeight: FontWeight.w500,
                                     ),
@@ -1481,7 +1720,7 @@ class _DriverCardState extends State<_DriverCard>
                               ],
                             ),
                             
-                            const SizedBox(height: 12),
+                            const SizedBox(height: 8),
                             
                             // Driver Details
                             Expanded(
@@ -1492,74 +1731,79 @@ class _DriverCardState extends State<_DriverCard>
                                     widget.driver.licenseCategory.code,
                                     _getLicenseStatusColor(),
                                   ),
-                                  const SizedBox(height: 8),
+                                  const SizedBox(height: 6),
                                   _buildDetailRow(
                                     'Experience', 
-                                    '${widget.driver.experienceInYears} years',
+                                    '${widget.driver.experienceInYears} yrs',
                                     const Color(0xFF10B981),
                                   ),
-                                  const SizedBox(height: 8),
+                                  const SizedBox(height: 6),
                                   _buildDetailRow(
                                     'Vehicle', 
-                                    widget.driver.hasVehicleAssigned ? 'Assigned' : 'None',
+                                    widget.driver.hasVehicleAssigned ? 'Yes' : 'None',
                                     widget.driver.hasVehicleAssigned ? const Color(0xFF10B981) : const Color(0xFF6B7280),
                                   ),
                                 ],
                               ),
                             ),
                             
-                            // Action Buttons & Alerts
-                            Row(
-                              children: [
-                                Expanded(
-                                  child: OutlinedButton.icon(
-                                    onPressed: widget.onEdit,
-                                    icon: const Icon(
-                                      Icons.edit_outlined,
-                                      size: 16,
-                                    ),
-                                    label: const Text('Edit'),
-                                    style: OutlinedButton.styleFrom(
-                                      foregroundColor: const Color(0xFF1565C0),
-                                      side: const BorderSide(
-                                        color: Color(0xFF1565C0),
+                            // Action Buttons & Alerts (hidden in selection mode)
+                            if (!widget.isSelectionMode) ...[
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: OutlinedButton.icon(
+                                      onPressed: widget.onEdit,
+                                      icon: const Icon(
+                                        Icons.edit_outlined,
+                                        size: 14,
                                       ),
+                                      label: const Text('Edit', style: TextStyle(fontSize: 11)),
+                                      style: OutlinedButton.styleFrom(
+                                        foregroundColor: const Color(0xFF1565C0),
+                                        side: const BorderSide(
+                                          color: Color(0xFF1565C0),
+                                        ),
+                                        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
+                                        shape: RoundedRectangleBorder(
+                                          borderRadius: BorderRadius.circular(8),
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 6),
+                                  OutlinedButton(
+                                    onPressed: widget.onDelete,
+                                    style: OutlinedButton.styleFrom(
+                                      foregroundColor: Colors.red,
+                                      side: const BorderSide(color: Colors.red),
+                                      padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
                                       shape: RoundedRectangleBorder(
                                         borderRadius: BorderRadius.circular(8),
                                       ),
                                     ),
-                                  ),
-                                ),
-                                const SizedBox(width: 8),
-                                OutlinedButton(
-                                  onPressed: widget.onDelete,
-                                  style: OutlinedButton.styleFrom(
-                                    foregroundColor: Colors.red,
-                                    side: const BorderSide(color: Colors.red),
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(8),
+                                    child: const Icon(
+                                      Icons.delete_outline,
+                                      size: 14,
                                     ),
                                   ),
-                                  child: const Icon(
-                                    Icons.delete_outline,
-                                    size: 16,
-                                  ),
-                                ),
-                                if (widget.driver.isLicenseExpired || widget.driver.isLicenseExpiringSoon) ...[
-                                  const SizedBox(width: 8),
-                                  Icon(
-                                    widget.driver.isLicenseExpired ? Icons.error : Icons.warning,
-                                    color: widget.driver.isLicenseExpired ? Colors.red : Colors.orange,
-                                    size: 20,
-                                  ),
+                                  if (widget.driver.isLicenseExpired || widget.driver.isLicenseExpiringSoon) ...[
+                                    const SizedBox(width: 6),
+                                    Icon(
+                                      widget.driver.isLicenseExpired ? Icons.error : Icons.warning,
+                                      color: widget.driver.isLicenseExpired ? Colors.red : Colors.orange,
+                                      size: 18,
+                                    ),
+                                  ],
                                 ],
-                              ],
-                            ),
+                              ),
+                            ],
                           ],
                         ),
                       ),
                     ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
             ),
@@ -1576,14 +1820,14 @@ class _DriverCardState extends State<_DriverCard>
         Text(
           label,
           style: const TextStyle(
-            fontSize: 14,
+            fontSize: 12,
             color: Color(0xFF6B7280),
           ),
         ),
         Text(
           value,
           style: TextStyle(
-            fontSize: 14,
+            fontSize: 12,
             fontWeight: FontWeight.w600,
             color: valueColor,
           ),

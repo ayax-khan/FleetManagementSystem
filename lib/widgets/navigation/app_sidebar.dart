@@ -84,7 +84,7 @@ class _AppSidebarState extends ConsumerState<AppSidebar> {
       icon: Icons.analytics_outlined,
       activeIcon: Icons.analytics,
       route: '/reports',
-      isComingSoon: true,
+      isComingSoon: false,
     ),
   ];
 
@@ -331,6 +331,9 @@ class _AppSidebarState extends ConsumerState<AppSidebar> {
         break;
       case 'import':
         Navigator.pushReplacementNamed(context, '/import');
+        break;
+      case 'reports':
+        Navigator.pushReplacementNamed(context, '/reports');
         break;
       default:
         ScaffoldMessenger.of(context).showSnackBar(

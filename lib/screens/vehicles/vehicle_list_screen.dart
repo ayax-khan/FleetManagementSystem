@@ -18,6 +18,8 @@ class _VehicleListScreenState extends ConsumerState<VehicleListScreen> {
   String _searchQuery = '';
   VehicleStatus? _statusFilter;
   VehicleType? _typeFilter;
+  final Set<String> _selectedVehicleIds = {};
+  bool _isSelectionMode = false;
 
   @override
   void dispose() {
@@ -220,26 +222,96 @@ class _VehicleListScreenState extends ConsumerState<VehicleListScreen> {
             ),
           ),
 
-          // Results Summary
+          // Results Summary and Selection Controls
           Container(
             padding: const EdgeInsets.all(16),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text(
-                  '${filteredVehicles.length} vehicle(s) found',
-                  style: const TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600,
-                    color: Colors.grey,
-                  ),
+                Row(
+                  children: [
+                    if (!_isSelectionMode)
+                      Text(
+                        '${filteredVehicles.length} vehicle(s) found',
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.grey,
+                        ),
+                      )
+                    else
+                      Text(
+                        '${_selectedVehicleIds.length} selected',
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                          color: Color(0xFF1565C0),
+                        ),
+                      ),
+                  ],
                 ),
-                if (vehicleState.isLoading)
-                  const SizedBox(
-                    width: 20,
-                    height: 20,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  ),
+                Row(
+                  children: [
+                    if (filteredVehicles.isNotEmpty && !_isSelectionMode)
+                      TextButton.icon(
+                        onPressed: () {
+                          setState(() {
+                            _isSelectionMode = true;
+                          });
+                        },
+                        icon: const Icon(Icons.checklist, size: 20),
+                        label: const Text('Select'),
+                        style: TextButton.styleFrom(
+                          foregroundColor: const Color(0xFF1565C0),
+                        ),
+                      ),
+                    if (_isSelectionMode) ...[
+                      TextButton.icon(
+                        onPressed: () {
+                          setState(() {
+                            if (_selectedVehicleIds.length == filteredVehicles.length) {
+                              _selectedVehicleIds.clear();
+                            } else {
+                              _selectedVehicleIds.addAll(
+                                filteredVehicles.map((v) => v.id),
+                              );
+                            }
+                          });
+                        },
+                        icon: Icon(
+                          _selectedVehicleIds.length == filteredVehicles.length
+                              ? Icons.check_box
+                              : Icons.check_box_outline_blank,
+                          size: 20,
+                        ),
+                        label: const Text('Select All'),
+                        style: TextButton.styleFrom(
+                          foregroundColor: const Color(0xFF1565C0),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      TextButton.icon(
+                        onPressed: () {
+                          setState(() {
+                            _isSelectionMode = false;
+                            _selectedVehicleIds.clear();
+                          });
+                        },
+                        icon: const Icon(Icons.close, size: 20),
+                        label: const Text('Cancel'),
+                        style: TextButton.styleFrom(
+                          foregroundColor: Colors.grey,
+                        ),
+                      ),
+                    ],
+                    if (vehicleState.isLoading)
+                      const SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      ),
+                  ],
+                ),
               ],
             ),
           ),
@@ -305,20 +377,33 @@ class _VehicleListScreenState extends ConsumerState<VehicleListScreen> {
                       padding: const EdgeInsets.all(12),
                       gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                         crossAxisCount: _getCrossAxisCount(context),
-                        childAspectRatio: 0.75,
+                        childAspectRatio: 1.0,
                         crossAxisSpacing: 12,
                         mainAxisSpacing: 12,
                       ),
                       itemCount: filteredVehicles.length,
                       itemBuilder: (context, index) {
                         final vehicle = filteredVehicles[index];
+                        final isSelected = _selectedVehicleIds.contains(vehicle.id);
                         return _VehicleCard(
                           vehicle: vehicle,
+                          isSelectionMode: _isSelectionMode,
+                          isSelected: isSelected,
                           onTap: () {
-                            ref
-                                .read(vehicleProvider.notifier)
-                                .selectVehicle(vehicle);
-                            _showVehicleDetailDialog(context, vehicle);
+                            if (_isSelectionMode) {
+                              setState(() {
+                                if (isSelected) {
+                                  _selectedVehicleIds.remove(vehicle.id);
+                                } else {
+                                  _selectedVehicleIds.add(vehicle.id);
+                                }
+                              });
+                            } else {
+                              ref
+                                  .read(vehicleProvider.notifier)
+                                  .selectVehicle(vehicle);
+                              _showVehicleDetailDialog(context, vehicle);
+                            }
                           },
                           onEdit: () {
                             _showEditVehicleDialog(vehicle);
@@ -333,15 +418,23 @@ class _VehicleListScreenState extends ConsumerState<VehicleListScreen> {
           ),
         ],
       ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () {
-          _showAddVehicleDialog();
-        },
-        backgroundColor: const Color(0xFF1565C0),
-        foregroundColor: Colors.white,
-        icon: const Icon(Icons.add),
-        label: const Text('Add Vehicle'),
-      ),
+      floatingActionButton: _isSelectionMode && _selectedVehicleIds.isNotEmpty
+          ? FloatingActionButton.extended(
+              onPressed: () => _showBulkDeleteDialog(),
+              backgroundColor: Colors.red,
+              foregroundColor: Colors.white,
+              icon: const Icon(Icons.delete_sweep),
+              label: Text('Delete ${_selectedVehicleIds.length}'),
+            )
+          : FloatingActionButton.extended(
+              onPressed: () {
+                _showAddVehicleDialog();
+              },
+              backgroundColor: const Color(0xFF1565C0),
+              foregroundColor: Colors.white,
+              icon: const Icon(Icons.add),
+              label: const Text('Add Vehicle'),
+            ),
     );
   }
 
@@ -715,6 +808,110 @@ class _VehicleListScreenState extends ConsumerState<VehicleListScreen> {
       builder: (context) => VehicleFormDialog(vehicle: vehicle),
     );
   }
+
+  void _showBulkDeleteDialog() {
+    showDialog(
+      context: context,
+      builder: (BuildContext dialogContext) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          title: const Row(
+            children: [
+              Icon(Icons.delete_sweep, color: Colors.red, size: 28),
+              SizedBox(width: 8),
+              Text(
+                'Delete Multiple Vehicles',
+                style: TextStyle(
+                  color: Colors.red,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ],
+          ),
+          content: Text(
+            'Are you sure you want to delete ${_selectedVehicleIds.length} vehicle(s)?\n\nThis action cannot be undone.',
+            style: const TextStyle(fontSize: 16),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
+            ),
+            ElevatedButton(
+              onPressed: () async {
+                Navigator.of(dialogContext).pop();
+
+                // Show loading indicator
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Row(
+                        children: [
+                          SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Colors.white,
+                            ),
+                          ),
+                          SizedBox(width: 16),
+                          Text('Deleting vehicles...'),
+                        ],
+                      ),
+                      duration: Duration(seconds: 30),
+                    ),
+                  );
+                }
+
+                // Delete each vehicle
+                int successCount = 0;
+                final vehicleNotifier = ref.read(vehicleProvider.notifier);
+                
+                for (final vehicleId in _selectedVehicleIds) {
+                  final success = await vehicleNotifier.deleteVehicle(vehicleId);
+                  if (success) successCount++;
+                }
+
+                if (mounted) {
+                  // Hide loading indicator
+                  ScaffoldMessenger.of(context).hideCurrentSnackBar();
+
+                  // Show result
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(
+                        successCount == _selectedVehicleIds.length
+                            ? 'Successfully deleted $successCount vehicle(s)'
+                            : 'Deleted $successCount of ${_selectedVehicleIds.length} vehicle(s)',
+                      ),
+                      backgroundColor:
+                          successCount == _selectedVehicleIds.length
+                              ? Colors.green
+                              : Colors.orange,
+                    ),
+                  );
+
+                  // Reset selection
+                  setState(() {
+                    _selectedVehicleIds.clear();
+                    _isSelectionMode = false;
+                  });
+                }
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.red,
+                foregroundColor: Colors.white,
+              ),
+              child: const Text('Delete All'),
+            ),
+          ],
+        );
+      },
+    );
+  }
 }
 
 class _VehicleCard extends StatefulWidget {
@@ -722,12 +919,16 @@ class _VehicleCard extends StatefulWidget {
   final VoidCallback onTap;
   final VoidCallback onEdit;
   final VoidCallback onDelete;
+  final bool isSelectionMode;
+  final bool isSelected;
 
   const _VehicleCard({
     required this.vehicle,
     required this.onTap,
     required this.onEdit,
     required this.onDelete,
+    this.isSelectionMode = false,
+    this.isSelected = false,
   });
 
   @override
@@ -796,35 +997,54 @@ class _VehicleCardState extends State<_VehicleCard>
               child: InkWell(
                 onTap: widget.onTap,
                 borderRadius: BorderRadius.circular(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Header with gradient background
-                    Container(
-                      decoration: BoxDecoration(
-                        gradient: const LinearGradient(
-                          begin: Alignment.centerLeft,
-                          end: Alignment.centerRight,
-                          colors: [Color(0xFFE3F2FD), Colors.white],
-                        ),
-                        borderRadius: const BorderRadius.only(
-                          topLeft: Radius.circular(16),
-                          topRight: Radius.circular(16),
-                        ),
-                        border: Border(
-                          bottom: BorderSide(
-                            color: Colors.grey.withOpacity(0.1),
-                            width: 1,
+                child: Container(
+                  decoration: widget.isSelected
+                      ? BoxDecoration(
+                          border: Border.all(
+                            color: const Color(0xFF1565C0),
+                            width: 3,
+                          ),
+                          borderRadius: BorderRadius.circular(16),
+                        )
+                      : null,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Header with gradient background
+                      Container(
+                        decoration: BoxDecoration(
+                          gradient: const LinearGradient(
+                            begin: Alignment.centerLeft,
+                            end: Alignment.centerRight,
+                            colors: [Color(0xFFE3F2FD), Colors.white],
+                          ),
+                          borderRadius: const BorderRadius.only(
+                            topLeft: Radius.circular(16),
+                            topRight: Radius.circular(16),
+                          ),
+                          border: Border(
+                            bottom: BorderSide(
+                              color: Colors.grey.withOpacity(0.1),
+                              width: 1,
+                            ),
                           ),
                         ),
-                      ),
-                      padding: const EdgeInsets.all(16),
-                      child: Row(
-                        children: [
+                        padding: const EdgeInsets.all(12),
+                        child: Row(
+                          children: [
+                            // Checkbox in selection mode
+                            if (widget.isSelectionMode) ...[
+                              Checkbox(
+                                value: widget.isSelected,
+                                onChanged: (_) => widget.onTap(),
+                                activeColor: const Color(0xFF1565C0),
+                              ),
+                              const SizedBox(width: 6),
+                            ],
                           // Vehicle Icon
                           Container(
-                            width: 48,
-                            height: 48,
+                            width: 40,
+                            height: 40,
                             decoration: BoxDecoration(
                               gradient: const LinearGradient(
                                 begin: Alignment.topLeft,
@@ -836,11 +1056,11 @@ class _VehicleCardState extends State<_VehicleCard>
                             child: const Icon(
                               Icons.directions_car,
                               color: Colors.white,
-                              size: 24,
+                              size: 20,
                             ),
                           ),
 
-                          const SizedBox(width: 12),
+                          const SizedBox(width: 10),
 
                           // Vehicle Info
                           Expanded(
@@ -850,17 +1070,17 @@ class _VehicleCardState extends State<_VehicleCard>
                                 Text(
                                   widget.vehicle.licensePlate,
                                   style: const TextStyle(
-                                    fontSize: 18,
+                                    fontSize: 16,
                                     fontWeight: FontWeight.bold,
                                     color: Color(0xFF1F2937),
                                   ),
                                   overflow: TextOverflow.ellipsis,
                                 ),
-                                const SizedBox(height: 4),
+                                const SizedBox(height: 2),
                                 Text(
                                   widget.vehicle.displayName,
                                   style: const TextStyle(
-                                    fontSize: 14,
+                                    fontSize: 12,
                                     color: Color(0xFF6B7280),
                                   ),
                                   overflow: TextOverflow.ellipsis,
@@ -872,19 +1092,19 @@ class _VehicleCardState extends State<_VehicleCard>
                           // Status Badge
                           Container(
                             padding: const EdgeInsets.symmetric(
-                              horizontal: 8,
-                              vertical: 4,
+                              horizontal: 6,
+                              vertical: 3,
                             ),
                             decoration: BoxDecoration(
                               color: _VehicleCardState._getStatusColor(
                                 widget.vehicle.status,
                               ),
-                              borderRadius: BorderRadius.circular(12),
+                              borderRadius: BorderRadius.circular(10),
                             ),
                             child: Text(
                               widget.vehicle.status.displayName,
                               style: const TextStyle(
-                                fontSize: 11,
+                                fontSize: 10,
                                 fontWeight: FontWeight.w600,
                                 color: Colors.white,
                               ),
@@ -897,7 +1117,7 @@ class _VehicleCardState extends State<_VehicleCard>
                     // Content
                     Expanded(
                       child: Padding(
-                        padding: const EdgeInsets.all(16),
+                        padding: const EdgeInsets.all(12),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
@@ -906,75 +1126,73 @@ class _VehicleCardState extends State<_VehicleCard>
                               child: Column(
                                 children: [
                                   _buildDetailRow(
-                                    'Model Year',
+                                    'Year',
                                     widget.vehicle.year,
                                   ),
-                                  const SizedBox(height: 8),
+                                  const SizedBox(height: 6),
                                   _buildDetailRow(
                                     'Color',
                                     widget.vehicle.color,
                                   ),
-                                  const SizedBox(height: 8),
+                                  const SizedBox(height: 6),
                                   _buildDetailRow(
                                     'Mileage',
                                     '${widget.vehicle.currentMileage.toStringAsFixed(0)} KM',
                                   ),
-                                  if (widget.vehicle.fuelCapacity > 0) ...[
-                                    const SizedBox(height: 8),
-                                    _buildDetailRow(
-                                      'Fuel Capacity',
-                                      '${widget.vehicle.fuelCapacity.toStringAsFixed(0)} L',
-                                    ),
-                                  ],
                                 ],
                               ),
                             ),
 
-                            // Action Buttons
-                            const SizedBox(height: 16),
-                            Row(
-                              children: [
-                                Expanded(
-                                  child: OutlinedButton.icon(
-                                    onPressed: widget.onEdit,
-                                    icon: const Icon(
-                                      Icons.edit_outlined,
-                                      size: 16,
-                                    ),
-                                    label: const Text('Edit'),
-                                    style: OutlinedButton.styleFrom(
-                                      foregroundColor: const Color(0xFF1565C0),
-                                      side: const BorderSide(
-                                        color: Color(0xFF1565C0),
+                            // Action Buttons (hidden in selection mode)
+                            if (!widget.isSelectionMode) ...[
+                              const SizedBox(height: 10),
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: OutlinedButton.icon(
+                                      onPressed: widget.onEdit,
+                                      icon: const Icon(
+                                        Icons.edit_outlined,
+                                        size: 14,
                                       ),
+                                      label: const Text('Edit', style: TextStyle(fontSize: 12)),
+                                      style: OutlinedButton.styleFrom(
+                                        foregroundColor: const Color(0xFF1565C0),
+                                        side: const BorderSide(
+                                          color: Color(0xFF1565C0),
+                                        ),
+                                        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
+                                        shape: RoundedRectangleBorder(
+                                          borderRadius: BorderRadius.circular(8),
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 6),
+                                  OutlinedButton(
+                                    onPressed: widget.onDelete,
+                                    style: OutlinedButton.styleFrom(
+                                      foregroundColor: Colors.red,
+                                      side: const BorderSide(color: Colors.red),
+                                      padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
                                       shape: RoundedRectangleBorder(
                                         borderRadius: BorderRadius.circular(8),
                                       ),
                                     ),
-                                  ),
-                                ),
-                                const SizedBox(width: 8),
-                                OutlinedButton(
-                                  onPressed: widget.onDelete,
-                                  style: OutlinedButton.styleFrom(
-                                    foregroundColor: Colors.red,
-                                    side: const BorderSide(color: Colors.red),
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(8),
+                                    child: const Icon(
+                                      Icons.delete_outline,
+                                      size: 14,
                                     ),
                                   ),
-                                  child: const Icon(
-                                    Icons.delete_outline,
-                                    size: 16,
-                                  ),
-                                ),
-                              ],
-                            ),
+                                ],
+                              ),
+                            ],
                           ],
                         ),
                       ),
                     ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
             ),
@@ -990,12 +1208,12 @@ class _VehicleCardState extends State<_VehicleCard>
       children: [
         Text(
           label,
-          style: const TextStyle(fontSize: 14, color: Color(0xFF6B7280)),
+          style: const TextStyle(fontSize: 12, color: Color(0xFF6B7280)),
         ),
         Text(
           value,
           style: const TextStyle(
-            fontSize: 14,
+            fontSize: 12,
             fontWeight: FontWeight.w600,
             color: Color(0xFF1F2937),
           ),

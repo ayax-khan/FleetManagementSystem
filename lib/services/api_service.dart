@@ -416,6 +416,37 @@ class ApiService {
     return await uploadFile('/excel/analyze', file);
   }
 
+  // Reports API
+  Future<Map<String, dynamic>> getSummaryDetailReport({
+    String? startDate,
+    String? endDate,
+    String? vehicleId,
+    String? driverId,
+  }) async {
+    final params = <String, dynamic>{};
+    if (startDate != null) params['start_date'] = startDate;
+    if (endDate != null) params['end_date'] = endDate;
+    if (vehicleId != null) params['vehicle_id'] = vehicleId;
+    if (driverId != null) params['driver_id'] = driverId;
+
+    final response = await get('/reporting/summary-detail', queryParameters: params);
+    return response;
+  }
+
+  Future<Map<String, dynamic>> getFuelPolReport({
+    String? vehicleId,
+    String? month,
+    String? fuelType,
+    String? station,
+  }) async {
+    final params = <String, dynamic>{};
+    if (vehicleId != null) params['vehicle_id'] = vehicleId;
+    if (month != null) params['month'] = month;
+    if (fuelType != null) params['fuel_type'] = fuelType;
+    if (station != null) params['station'] = station;
+    return await get('/reporting/fuel-pol', queryParameters: params);
+  }
+
   Future<Map<String, dynamic>> importExcelFile(
     File file, {
     List<String>? selectedSheets,

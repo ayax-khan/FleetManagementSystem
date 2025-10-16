@@ -361,7 +361,7 @@ class JobNotifier extends StateNotifier<JobState> {
 
     return Job(
       id: data['id'] ?? '',
-      jobId: data['id'] ?? '', // Use id as jobId for now
+      jobId: (data['job_id'] ?? _friendlyJobId(data)).toString(),
       dateTimeOut: DateTime.parse(data['start_time'] ?? DateTime.now().toIso8601String()),
       vehicleId: vehicleId,
       vehicleName: vehicleName,
@@ -370,6 +370,10 @@ class JobNotifier extends StateNotifier<JobState> {
       routeFrom: routeFrom,
       routeTo: routeTo,
       purpose: data['purpose'] ?? '',
+      destination: data['destination'],
+      officerStaff: data['officer_staff'],
+      coes: data['coes'],
+      dutyDetail: data['duty_detail'],
       startingMeterReading: (data['start_km'] ?? 0.0).toDouble(),
       remarksOut: null, // Backend doesn't have this field
       status: status,
@@ -458,11 +462,16 @@ class JobNotifier extends StateNotifier<JobState> {
     String status = job.status == JobStatus.completed ? 'completed' : 'in_progress';
 
     return {
+      'job_id': job.jobId,
       'vehicle_id': job.vehicleId,
       'driver_id': job.driverId.isNotEmpty ? job.driverId : null,
       'start_km': job.startingMeterReading,
       'start_time': job.dateTimeOut.toIso8601String(),
       'purpose': job.purpose,
+      'destination': job.destination,
+      'officer_staff': job.officerStaff,
+      'coes': job.coes,
+      'duty_detail': job.dutyDetail,
       'route': route,
       'status': status,
       if (job.dateTimeIn != null) 'end_time': job.dateTimeIn!.toIso8601String(),
@@ -470,6 +479,21 @@ class JobNotifier extends StateNotifier<JobState> {
       if (job.totalKm != null) 'distance': job.totalKm,
       if (job.fuelUsed != null) 'fuel_used': job.fuelUsed,
     };
+  }
+
+  // Generate a readable fallback ID when backend doesn't provide job_id
+  String _friendlyJobId(Map<String, dynamic> data) {
+    final created = data['created_at']?.toString();
+    String datePart;
+    try {
+      final dt = created != null ? DateTime.parse(created) : DateTime.now();
+      datePart = '${dt.year}${dt.month.toString().padLeft(2,'0')}${dt.day.toString().padLeft(2,'0')}';
+    } catch (_) {
+      datePart = 'NA';
+    }
+    final rawId = data['id']?.toString() ?? '';
+    final short = rawId.isNotEmpty ? rawId.replaceAll('-', '').substring(0, 6).toUpperCase() : 'XXXXXX';
+    return 'JOB-$datePart-$short';
   }
 }
 

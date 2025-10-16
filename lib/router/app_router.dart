@@ -7,6 +7,7 @@ import '../screens/jobs/job_list_screen.dart';
 import '../screens/attendance/new_attendance_screen.dart';
 import '../screens/fuel/fuel_list_screen.dart';
 import '../screens/import/import_screen.dart';
+import '../screens/reports/reports_screen.dart';
 
 class AppRouter {
   static const String dashboard = '/dashboard';
@@ -16,6 +17,7 @@ class AppRouter {
   static const String attendance = '/attendance';
   static const String fuel = '/fuel';
   static const String import = '/import';
+  static const String reports = '/reports';
 
   static Route<dynamic>? generateRoute(RouteSettings settings) {
     switch (settings.name) {
@@ -78,6 +80,15 @@ class AppRouter {
           const MainLayout(
             title: 'Import Data',
             child: ImportScreen(),
+          ),
+          settings,
+        );
+      
+      case reports:
+        return _buildPageRoute(
+          const MainLayout(
+            title: 'Reports',
+            child: ReportsScreen(),
           ),
           settings,
         );

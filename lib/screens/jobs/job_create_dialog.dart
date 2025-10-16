@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'dart:math' as math;
 import '../../models/job.dart';
 import '../../models/vehicle.dart';
 import '../../models/driver.dart';
@@ -18,6 +19,10 @@ class _JobCreateDialogState extends ConsumerState<JobCreateDialog> {
   final _formKey = GlobalKey<FormState>();
   final _routeController = TextEditingController();
   final _purposeController = TextEditingController();
+  final _destinationController = TextEditingController();
+  final _officerStaffController = TextEditingController();
+  final _coesController = TextEditingController();
+  final _dutyDetailController = TextEditingController();
   final _odometerOutController = TextEditingController();
   
   Vehicle? _selectedVehicle;
@@ -38,6 +43,10 @@ class _JobCreateDialogState extends ConsumerState<JobCreateDialog> {
   void dispose() {
     _routeController.dispose();
     _purposeController.dispose();
+    _destinationController.dispose();
+    _officerStaffController.dispose();
+    _coesController.dispose();
+    _dutyDetailController.dispose();
     _odometerOutController.dispose();
     super.dispose();
   }
@@ -53,14 +62,18 @@ class _JobCreateDialogState extends ConsumerState<JobCreateDialog> {
       ),
       child: Container(
         width: MediaQuery.of(context).size.width * 0.9,
-        constraints: const BoxConstraints(maxWidth: 500),
+        constraints: BoxConstraints(
+          maxWidth: 500,
+          maxHeight: MediaQuery.of(context).size.height * 0.85,
+        ),
         padding: const EdgeInsets.all(24),
         child: Form(
           key: _formKey,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
               // Header
               Row(
                 children: [
@@ -319,6 +332,71 @@ class _JobCreateDialogState extends ConsumerState<JobCreateDialog> {
               ),
               
               const SizedBox(height: 16),
+
+              // Destination Input
+              TextFormField(
+                controller: _destinationController,
+                decoration: InputDecoration(
+                  labelText: 'Destination',
+                  hintText: 'e.g., Office HQ',
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  prefixIcon: const Icon(Icons.place_outlined),
+                ),
+                maxLines: 1,
+              ),
+
+              const SizedBox(height: 12),
+
+              // Officer/Staff Input
+              TextFormField(
+                controller: _officerStaffController,
+                decoration: InputDecoration(
+                  labelText: 'Officer/Staff',
+                  hintText: 'e.g., John Doe',
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  prefixIcon: const Icon(Icons.badge_outlined),
+                ),
+                maxLines: 1,
+              ),
+
+              const SizedBox(height: 12),
+
+              // CoEs Input
+              TextFormField(
+                controller: _coesController,
+                decoration: InputDecoration(
+                  labelText: 'CoEs',
+                  hintText: 'Enter CoEs if any',
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  prefixIcon: const Icon(Icons.note_alt_outlined),
+                ),
+                maxLines: 1,
+              ),
+
+              const SizedBox(height: 12),
+
+              // Duty Detail Input
+              TextFormField(
+                controller: _dutyDetailController,
+                decoration: InputDecoration(
+                  labelText: 'Duty Detail',
+                  hintText: 'e.g., VIP Transport',
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  prefixIcon: const Icon(Icons.assignment_outlined),
+                ),
+                maxLines: 2,
+                minLines: 1,
+              ),
+              
+              const SizedBox(height: 16),
               
               // Odometer Out Input
               TextFormField(
@@ -398,7 +476,8 @@ class _JobCreateDialogState extends ConsumerState<JobCreateDialog> {
                   ),
                 ],
               ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
@@ -425,6 +504,10 @@ class _JobCreateDialogState extends ConsumerState<JobCreateDialog> {
             ? _routeController.text.trim().split(' to ').last 
             : _routeController.text.trim(),
         purpose: _purposeController.text.trim(),
+        destination: _destinationController.text.trim().isEmpty ? null : _destinationController.text.trim(),
+        officerStaff: _officerStaffController.text.trim().isEmpty ? null : _officerStaffController.text.trim(),
+        coes: _coesController.text.trim().isEmpty ? null : _coesController.text.trim(),
+        dutyDetail: _dutyDetailController.text.trim().isEmpty ? null : _dutyDetailController.text.trim(),
         startingMeterReading: double.parse(_odometerOutController.text.trim()),
         remarksOut: 'Created from app',
       );

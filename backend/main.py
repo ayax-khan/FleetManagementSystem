@@ -13,6 +13,7 @@ from pathlib import Path
 
 # Import route modules
 from app.routes import vehicles, drivers, trips, fuel, maintenance, excel_import
+from app.routes import reporting
 from app.database.hive_manager import HiveManager
 from app.core.config import settings
 
@@ -61,6 +62,7 @@ app.include_router(trips.router, prefix="/api/v1/trips", tags=["trips"])
 app.include_router(fuel.router, prefix="/api/v1/fuel", tags=["fuel"])
 app.include_router(maintenance.router, prefix="/api/v1/maintenance", tags=["maintenance"])
 app.include_router(excel_import.router, prefix="/api/v1/excel", tags=["excel"])
+app.include_router(reporting.router, prefix="/api/v1/reporting", tags=["reporting"])
 
 @app.get("/")
 async def root():

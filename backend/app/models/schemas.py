@@ -123,6 +123,11 @@ class TripBase(BaseModel):
     end_time: Optional[str] = None
     purpose: Optional[str] = None
     route: Optional[str] = None
+    destination: Optional[str] = None
+    officer_staff: Optional[str] = None
+    coes: Optional[str] = None
+    duty_detail: Optional[str] = None
+    remarks: Optional[str] = None
     distance: Optional[float] = Field(default=0.0, ge=0)
     fuel_used: Optional[float] = Field(default=0.0, ge=0)
     status: str = Field(default="in_progress")
@@ -141,6 +146,11 @@ class TripUpdate(BaseModel):
     end_time: Optional[str] = None
     purpose: Optional[str] = None
     route: Optional[str] = None
+    destination: Optional[str] = None
+    officer_staff: Optional[str] = None
+    coes: Optional[str] = None
+    duty_detail: Optional[str] = None
+    remarks: Optional[str] = None
     distance: Optional[float] = None
     fuel_used: Optional[float] = None
     status: Optional[str] = None
@@ -150,6 +160,7 @@ class Trip(TripBase):
     id: str
     created_at: str
     updated_at: str
+
 
 # Fuel Entry Models
 class FuelEntryBase(BaseModel):

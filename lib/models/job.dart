@@ -20,6 +20,10 @@ class Job {
   final String routeFrom;
   final String routeTo;
   final String purpose;
+  final String? destination; // Reporting field
+  final String? officerStaff; // Reporting field
+  final String? coes; // Reporting field
+  final String? dutyDetail; // Reporting field
   final double startingMeterReading; // Meter Out
   final String? remarksOut; // Remarks when going out
   final JobStatus status;
@@ -46,6 +50,10 @@ class Job {
     required this.routeFrom,
     required this.routeTo,
     required this.purpose,
+    this.destination,
+    this.officerStaff,
+    this.coes,
+    this.dutyDetail,
     required this.startingMeterReading,
     this.remarksOut,
     required this.status,
@@ -68,6 +76,10 @@ class Job {
     required String routeFrom,
     required String routeTo,
     required String purpose,
+    String? destination,
+    String? officerStaff,
+    String? coes,
+    String? dutyDetail,
     required double startingMeterReading,
     String? remarksOut,
     String? jobId,
@@ -86,6 +98,10 @@ class Job {
       routeFrom: routeFrom,
       routeTo: routeTo,
       purpose: purpose,
+      destination: destination,
+      officerStaff: officerStaff,
+      coes: coes,
+      dutyDetail: dutyDetail,
       startingMeterReading: startingMeterReading,
       remarksOut: remarksOut,
       status: JobStatus.pending,
@@ -127,6 +143,10 @@ class Job {
     String? routeFrom,
     String? routeTo,
     String? purpose,
+    String? destination,
+    String? officerStaff,
+    String? coes,
+    String? dutyDetail,
     double? startingMeterReading,
     String? remarksOut,
     JobStatus? status,
@@ -150,6 +170,10 @@ class Job {
       routeFrom: routeFrom ?? this.routeFrom,
       routeTo: routeTo ?? this.routeTo,
       purpose: purpose ?? this.purpose,
+      destination: destination ?? this.destination,
+      officerStaff: officerStaff ?? this.officerStaff,
+      coes: coes ?? this.coes,
+      dutyDetail: dutyDetail ?? this.dutyDetail,
       startingMeterReading: startingMeterReading ?? this.startingMeterReading,
       remarksOut: remarksOut ?? this.remarksOut,
       status: status ?? this.status,
@@ -177,6 +201,10 @@ class Job {
       'route_from': routeFrom,
       'route_to': routeTo,
       'purpose': purpose,
+      'destination': destination,
+      'officer_staff': officerStaff,
+      'coes': coes,
+      'duty_detail': dutyDetail,
       'starting_meter_reading': startingMeterReading,
       'remarks_out': remarksOut,
       'status': status.name,
@@ -204,6 +232,10 @@ class Job {
       routeFrom: json['route_from'] ?? '',
       routeTo: json['route_to'] ?? '',
       purpose: json['purpose'] ?? '',
+      destination: json['destination'],
+      officerStaff: json['officer_staff'],
+      coes: json['coes'],
+      dutyDetail: json['duty_detail'],
       startingMeterReading: (json['starting_meter_reading'] ?? 0).toDouble(),
       remarksOut: json['remarks_out'],
       status: JobStatus.values.firstWhere(

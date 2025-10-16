@@ -42,6 +42,13 @@ class _JobListScreenState extends ConsumerState<JobListScreen> {
           .toList();
     }
 
+    // Sort by newest first, then by jobId
+    filteredJobs.sort((a, b) {
+      final cmp = b.dateTimeOut.compareTo(a.dateTimeOut);
+      if (cmp != 0) return cmp;
+      return a.jobId.compareTo(b.jobId);
+    });
+
     return Scaffold(
       appBar: AppBar(
         toolbarHeight: 40,
@@ -285,16 +292,30 @@ class _JobListScreenState extends ConsumerState<JobListScreen> {
                         ],
                       ),
                     )
-                  : ListView.builder(
-                      padding: const EdgeInsets.all(12),
-                      itemCount: filteredJobs.length,
-                      itemBuilder: (context, index) {
-                        final job = filteredJobs[index];
-                        return JobCard(
-                          job: job,
-                          onTap: () => _showJobDetail(job),
-                          onComplete: job.isPending ? () => _showCompleteJob(job) : null,
-                          onDelete: () => _showDeleteDialog(job),
+                  : LayoutBuilder(
+                      builder: (context, constraints) {
+                        final width = constraints.maxWidth;
+                        const minCardWidth = 300.0; // target compact width
+                        const maxCols = 4;
+                        int crossAxisCount = (width / minCardWidth).floor().clamp(1, maxCols);
+                        return GridView.builder(
+                          padding: const EdgeInsets.all(10),
+                          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                            crossAxisCount: crossAxisCount,
+                            crossAxisSpacing: 10,
+                            mainAxisSpacing: 10,
+                            childAspectRatio: 1.2, // increased height
+                          ),
+                          itemCount: filteredJobs.length,
+                          itemBuilder: (context, index) {
+                            final job = filteredJobs[index];
+                            return JobCard(
+                              job: job,
+                              onTap: () => _showJobDetail(job),
+                              onComplete: job.isPending ? () => _showCompleteJob(job) : null,
+                              onDelete: () => _showDeleteDialog(job),
+                            );
+                          },
                         );
                       },
                     ),
@@ -475,9 +496,10 @@ class _JobCardState extends State<JobCard>
                 onTap: widget.onTap,
                 borderRadius: BorderRadius.circular(16),
                 child: Container(
-                  padding: const EdgeInsets.all(16),
+                  padding: const EdgeInsets.all(10),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
                     children: [
                       // Header Row
                       Row(
@@ -485,19 +507,19 @@ class _JobCardState extends State<JobCard>
                           // Status Badge
                           Container(
                             padding: const EdgeInsets.symmetric(
-                              horizontal: 12,
+                              horizontal: 10,
                               vertical: 6,
                             ),
                             decoration: BoxDecoration(
                               color: _getStatusColor(widget.job.status),
-                              borderRadius: BorderRadius.circular(20),
+                              borderRadius: BorderRadius.circular(16),
                             ),
                             child: Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
                                 Text(
                                   widget.job.status.icon,
-                                  style: const TextStyle(fontSize: 12),
+                                  style: const TextStyle(fontSize: 11),
                                 ),
                                 const SizedBox(width: 4),
                                 Text(
@@ -505,28 +527,33 @@ class _JobCardState extends State<JobCard>
                                   style: const TextStyle(
                                     color: Colors.white,
                                     fontWeight: FontWeight.bold,
-                                    fontSize: 12,
+                                    fontSize: 11,
                                   ),
                                 ),
                               ],
                             ),
                           ),
-                          
-                          const Spacer(),
-                          
-                          // Job ID
-                          Text(
-                            widget.job.jobId,
-                            style: const TextStyle(
-                              fontWeight: FontWeight.bold,
-                              color: Color(0xFF1565C0),
-                              fontSize: 16,
+                          const SizedBox(width: 8),
+                          // Job ID (ellipsized)
+                          Expanded(
+                            child: Align(
+                              alignment: Alignment.centerRight,
+                              child: Text(
+                                widget.job.jobId,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  color: Color(0xFF1565C0),
+                                  fontSize: 14,
+                                ),
+                              ),
                             ),
                           ),
                         ],
                       ),
                       
-                      const SizedBox(height: 12),
+                      const SizedBox(height: 8),
                       
                       // Vehicle and Driver Info
                       Row(
@@ -537,17 +564,21 @@ class _JobCardState extends State<JobCard>
                               children: [
                                 Text(
                                   '🚗 ${widget.job.vehicleName}',
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
                                   style: const TextStyle(
                                     fontWeight: FontWeight.w600,
-                                    fontSize: 14,
+                                    fontSize: 13,
                                   ),
                                 ),
-                                const SizedBox(height: 4),
+                                const SizedBox(height: 3),
                                 Text(
                                   '👤 ${widget.job.driverName}',
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
                                   style: const TextStyle(
                                     color: Colors.grey,
-                                    fontSize: 13,
+                                    fontSize: 12,
                                   ),
                                 ),
                               ],
@@ -556,11 +587,11 @@ class _JobCardState extends State<JobCard>
                         ],
                       ),
                       
-                      const SizedBox(height: 12),
+                      const SizedBox(height: 8),
                       
-                      // Route Information
+                       // Route Information
                       Container(
-                        padding: const EdgeInsets.all(12),
+                        padding: const EdgeInsets.all(8),
                         decoration: BoxDecoration(
                           color: Colors.grey[50],
                           borderRadius: BorderRadius.circular(8),
@@ -570,29 +601,33 @@ class _JobCardState extends State<JobCard>
                           children: [
                             Row(
                               children: [
-                                const Icon(Icons.route, size: 16, color: Colors.grey),
-                                const SizedBox(width: 8),
+                                const Icon(Icons.route, size: 14, color: Colors.grey),
+                                const SizedBox(width: 6),
                                 Expanded(
                                   child: Text(
                                     widget.job.route,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
                                     style: const TextStyle(
                                       fontWeight: FontWeight.w500,
-                                      fontSize: 13,
+                                      fontSize: 11,
                                     ),
                                   ),
                                 ),
                               ],
                             ),
-                            const SizedBox(height: 8),
+                            const SizedBox(height: 6),
                             Row(
                               children: [
-                                const Icon(Icons.business_center, size: 16, color: Colors.grey),
-                                const SizedBox(width: 8),
+                                const Icon(Icons.business_center, size: 14, color: Colors.grey),
+                                const SizedBox(width: 6),
                                 Expanded(
                                   child: Text(
                                     widget.job.purpose,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
                                     style: const TextStyle(
-                                      fontSize: 13,
+                                      fontSize: 11,
                                       color: Colors.grey,
                                     ),
                                   ),
@@ -603,7 +638,7 @@ class _JobCardState extends State<JobCard>
                         ),
                       ),
                       
-                      const SizedBox(height: 12),
+                      const SizedBox(height: 8),
                       
                       // Time and Stats Row
                       Row(
@@ -614,8 +649,10 @@ class _JobCardState extends State<JobCard>
                               children: [
                                 Text(
                                   'Out: ${widget.job.formattedTimeOut}',
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
                                   style: const TextStyle(
-                                    fontSize: 12,
+                                    fontSize: 11,
                                     color: Colors.grey,
                                   ),
                                 ),
@@ -623,8 +660,10 @@ class _JobCardState extends State<JobCard>
                                   const SizedBox(height: 2),
                                   Text(
                                     'In: ${widget.job.formattedTimeIn}',
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
                                     style: const TextStyle(
-                                      fontSize: 12,
+                                      fontSize: 11,
                                       color: Colors.grey,
                                     ),
                                   ),
@@ -639,15 +678,20 @@ class _JobCardState extends State<JobCard>
                               children: [
                                 Text(
                                   widget.job.formattedTotalKm,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
                                   style: const TextStyle(
                                     fontWeight: FontWeight.bold,
                                     color: Color(0xFF1565C0),
+                                    fontSize: 12,
                                   ),
                                 ),
                                 Text(
                                   '${widget.job.formattedFuelUsed} • ${widget.job.formattedFuelEfficiency}',
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
                                   style: const TextStyle(
-                                    fontSize: 12,
+                                    fontSize: 11,
                                     color: Colors.grey,
                                   ),
                                 ),
@@ -657,54 +701,54 @@ class _JobCardState extends State<JobCard>
                         ],
                       ),
                       
-                      const SizedBox(height: 16),
+                      const SizedBox(height: 10),
                       
-                      // Action Buttons
-                      Row(
+                      // Action Buttons (wrap to avoid overflow)
+                      Wrap(
+                        spacing: 6,
+                        runSpacing: 6,
                         children: [
-                          if (widget.job.isPending && widget.onComplete != null) ...[
-                            Expanded(
-                              child: ElevatedButton.icon(
-                                onPressed: widget.onComplete,
-                                icon: const Icon(Icons.check_circle_outline, size: 18),
-                                label: const Text('Complete'),
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: Colors.green,
-                                  foregroundColor: Colors.white,
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(8),
-                                  ),
+                          if (widget.job.isPending && widget.onComplete != null)
+                            ElevatedButton.icon(
+                              onPressed: widget.onComplete,
+                              icon: const Icon(Icons.check_circle_outline, size: 16),
+                              label: const Text('Complete', style: TextStyle(fontSize: 11)),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.green,
+                                foregroundColor: Colors.white,
+                                minimumSize: const Size(0, 32),
+                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(8),
                                 ),
                               ),
                             ),
-                            const SizedBox(width: 8),
-                          ],
-                          
                           OutlinedButton.icon(
                             onPressed: widget.onTap,
-                            icon: const Icon(Icons.visibility_outlined, size: 18),
-                            label: const Text('Details'),
+                            icon: const Icon(Icons.visibility_outlined, size: 16),
+                            label: const Text('Details', style: TextStyle(fontSize: 11)),
                             style: OutlinedButton.styleFrom(
                               foregroundColor: const Color(0xFF1565C0),
                               side: const BorderSide(color: Color(0xFF1565C0)),
+                              minimumSize: const Size(0, 32),
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                               shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(8),
                               ),
                             ),
                           ),
-                          
-                          const SizedBox(width: 8),
-                          
                           OutlinedButton(
                             onPressed: widget.onDelete,
                             style: OutlinedButton.styleFrom(
                               foregroundColor: Colors.red,
                               side: const BorderSide(color: Colors.red),
+                              minimumSize: const Size(32, 32),
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                               shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(8),
                               ),
                             ),
-                            child: const Icon(Icons.delete_outline, size: 18),
+                            child: const Icon(Icons.delete_outline, size: 16),
                           ),
                         ],
                       ),

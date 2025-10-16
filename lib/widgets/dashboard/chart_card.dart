@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-class ChartCard extends StatelessWidget {
+class ChartCard extends StatefulWidget {
   final String title;
   final List<Map<String, dynamic>> data;
 
@@ -9,6 +9,13 @@ class ChartCard extends StatelessWidget {
     required this.title,
     required this.data,
   });
+
+  @override
+  State<ChartCard> createState() => _ChartCardState();
+}
+
+class _ChartCardState extends State<ChartCard> {
+  int? _hoveredIndex;
 
   @override
   Widget build(BuildContext context) {
@@ -36,7 +43,7 @@ class ChartCard extends StatelessWidget {
                 children: [
                   Expanded(
                     child: Text(
-                      title,
+                      widget.title,
                       style: const TextStyle(
                         fontSize: 18,
                         fontWeight: FontWeight.bold,
@@ -50,8 +57,8 @@ class ChartCard extends StatelessWidget {
             
             // Simple Bar Chart
             SizedBox(
-              height: 200,
-              child: data.isEmpty
+              height: 220,
+              child: widget.data.isEmpty
                   ? const Center(
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
@@ -80,7 +87,7 @@ class ChartCard extends StatelessWidget {
   }
 
   Widget _buildSimpleBarChart() {
-    final maxValue = data.map((d) => d['cost'] as double).reduce((a, b) => a > b ? a : b);
+    final maxValue = widget.data.map((d) => d['cost'] as double).reduce((a, b) => a > b ? a : b);
     
     if (maxValue == 0) {
       return const Center(
@@ -95,60 +102,86 @@ class ChartCard extends StatelessWidget {
 
     return Row(
       crossAxisAlignment: CrossAxisAlignment.end,
-      children: data.map((item) {
+      children: List.generate(widget.data.length, (index) {
+        final item = widget.data[index];
         final cost = item['cost'] as double;
         final date = item['date'] as String;
         final height = (cost / maxValue) * 150;
+        final isHovered = _hoveredIndex == index;
         
         return Expanded(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 4),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.end,
-              children: [
-                // Bar
-                AnimatedContainer(
-                  duration: const Duration(milliseconds: 800),
-                  height: height + 20, // Minimum height of 20
-                  decoration: BoxDecoration(
-                    gradient: const LinearGradient(
-                      begin: Alignment.bottomCenter,
-                      end: Alignment.topCenter,
-                      colors: [
-                        Color(0xFF1E3A8A),
-                        Color(0xFF3B82F6),
-                      ],
+          child: MouseRegion(
+            onEnter: (_) => setState(() => _hoveredIndex = index),
+            onExit: (_) => setState(() => _hoveredIndex = null),
+            cursor: SystemMouseCursors.click,
+            child: Tooltip(
+              message: 'Date: $date\nCost: Rs ${cost.toStringAsFixed(2)}',
+              preferBelow: false,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 4),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    // Bar
+                    AnimatedContainer(
+                      duration: const Duration(milliseconds: 300),
+                      height: height + 20,
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.bottomCenter,
+                          end: Alignment.topCenter,
+                          colors: isHovered
+                              ? [
+                                  const Color(0xFF1565C0),
+                                  const Color(0xFF64B5F6),
+                                ]
+                              : [
+                                  const Color(0xFF1E3A8A),
+                                  const Color(0xFF3B82F6),
+                                ],
+                        ),
+                        borderRadius: const BorderRadius.only(
+                          topLeft: Radius.circular(6),
+                          topRight: Radius.circular(6),
+                        ),
+                        boxShadow: isHovered
+                            ? [
+                                BoxShadow(
+                                  color: Colors.blue.withOpacity(0.4),
+                                  blurRadius: 8,
+                                  offset: const Offset(0, 2),
+                                ),
+                              ]
+                            : null,
+                      ),
                     ),
-                    borderRadius: const BorderRadius.only(
-                      topLeft: Radius.circular(6),
-                      topRight: Radius.circular(6),
+                    const SizedBox(height: 8),
+                    // Label
+                    Text(
+                      date,
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: isHovered ? const Color(0xFF1565C0) : const Color(0xFF6B7280),
+                        fontWeight: isHovered ? FontWeight.bold : FontWeight.normal,
+                      ),
                     ),
-                  ),
+                    const SizedBox(height: 4),
+                    // Value
+                    Text(
+                      'Rs ${cost.toInt()}',
+                      style: TextStyle(
+                        fontSize: 10,
+                        color: isHovered ? const Color(0xFF1565C0) : const Color(0xFF6B7280),
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
                 ),
-                const SizedBox(height: 8),
-                // Label
-                Text(
-                  date,
-                  style: const TextStyle(
-                    fontSize: 12,
-                    color: Color(0xFF6B7280),
-                  ),
-                ),
-                const SizedBox(height: 4),
-                // Value
-                Text(
-                  'Rs ${cost.toInt()}',
-                  style: const TextStyle(
-                    fontSize: 10,
-                    color: Color(0xFF6B7280),
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-              ],
+              ),
             ),
           ),
         );
-      }).toList(),
+      }),
     );
   }
 }
